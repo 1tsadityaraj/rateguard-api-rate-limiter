@@ -20,7 +20,7 @@ const requestLogSchema = new mongoose.Schema(
     apiKey: { type: String, default: null },
     userAgent: { type: String, default: null },
     responseTime: { type: Number, default: 0 }, // ms
-    timestamp: { type: Date, default: Date.now, index: true },
+    timestamp: { type: Date, default: Date.now },
   },
   {
     timestamps: false,

@@ -1,59 +1,124 @@
 import { useState, useEffect } from "react";
+import { Toaster } from "react-hot-toast";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
+import LoginPage from "./pages/LoginPage";
+import BlockedUsersTable from "./components/BlockedUsersTable";
+import AlertsPanel from "./components/AlertsPanel";
+import ApiKeysPanel from "./components/ApiKeysPanel";
+import SettingsPanel from "./components/SettingsPanel";
+import RateTester from "./components/RateTester";
 import { useDashboardData } from "./hooks/useDashboardData";
+import { getMe, logout } from "./services/api";
 
 function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
-  const { connected } = useDashboardData();
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const { connected, blockedUsers, alerts, health, refresh } = useDashboardData();
 
-  // Simple placeholder for other tabs
+  // Check for existing JWT on mount
+  useEffect(() => {
+    const token = localStorage.getItem("rateguard_token");
+    if (token) {
+      getMe()
+        .then((data) => setUser(data.user))
+        .catch(() => {
+          // Token expired or invalid — clear it
+          localStorage.removeItem("rateguard_token");
+        })
+        .finally(() => setAuthChecked(true));
+    } else {
+      setAuthChecked(true);
+    }
+  }, []);
+
+  const handleAuth = (result) => {
+    setUser(result.user);
+  };
+
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+  };
+
+  // Show loading while checking auth
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-dark-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-white/10 border-t-accent-cyan rounded-full animate-spin" />
+          <p className="text-xs text-dark-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user) {
+    return (
+      <>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: "#1e1e2e",
+              color: "#e2e8f0",
+              borderRadius: "12px",
+              border: "1px solid rgba(255,255,255,0.1)",
+              fontSize: "13px",
+            },
+          }}
+        />
+        <LoginPage onAuth={handleAuth} />
+      </>
+    );
+  }
+
+  // Render the active tab content
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
         return <Dashboard />;
       case "blocked":
-        return (
-          <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center h-64 border border-white/5">
-            <h2 className="text-xl font-bold text-white mb-2">Blocked Users</h2>
-            <p className="text-dark-400">Manage temporarily blocked IPs and Users here.</p>
-          </div>
-        );
+        return <BlockedUsersTable blockedUsers={blockedUsers} onRefresh={refresh} />;
       case "alerts":
-        return (
-          <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center h-64 border border-white/5">
-            <h2 className="text-xl font-bold text-white mb-2">Abuse Alerts</h2>
-            <p className="text-dark-400">View recent abuse spikes and warnings.</p>
-          </div>
-        );
+        return <AlertsPanel alerts={alerts} onRefresh={refresh} />;
       case "apikeys":
-        return (
-          <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center h-64 border border-white/5">
-            <h2 className="text-xl font-bold text-white mb-2">API Keys</h2>
-            <p className="text-dark-400">Manage Free and Pro tier API keys.</p>
-          </div>
-        );
+        return <ApiKeysPanel />;
+      case "tester":
+        return <RateTester />;
       case "settings":
-        return (
-          <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center h-64 border border-white/5">
-            <h2 className="text-xl font-bold text-white mb-2">Settings</h2>
-            <p className="text-dark-400">Configure default rate limits and block durations.</p>
-          </div>
-        );
+        return <SettingsPanel health={health} onRefresh={refresh} />;
       default:
         return null;
     }
   };
 
   return (
-    <Layout
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      connected={connected}
-      user={{ username: "Admin", email: "admin@rateguard.app" }} // Hardcoded for demo
-    >
-      <div className="max-w-7xl mx-auto">{renderContent()}</div>
-    </Layout>
+    <>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: "#1e1e2e",
+            color: "#e2e8f0",
+            borderRadius: "12px",
+            border: "1px solid rgba(255,255,255,0.1)",
+            fontSize: "13px",
+          },
+        }}
+      />
+      <Layout
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        connected={connected}
+        onLogout={handleLogout}
+        user={user}
+      >
+        <div className="max-w-7xl mx-auto">{renderContent()}</div>
+      </Layout>
+    </>
   );
 }
 

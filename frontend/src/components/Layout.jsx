@@ -9,10 +9,12 @@ import {
   HiOutlineX,
   HiOutlineLogout,
   HiOutlineStatusOnline,
+  HiOutlineBeaker,
 } from "react-icons/hi";
 
 /**
  * Main layout wrapper with collapsible sidebar and fixed header.
+ * Supports 6 navigation tabs and shows connection status.
  */
 export default function Layout({
   children,
@@ -29,6 +31,7 @@ export default function Layout({
     { id: "blocked", label: "Blocked Users", icon: HiOutlineShieldCheck },
     { id: "alerts", label: "Alerts", icon: HiOutlineBell },
     { id: "apikeys", label: "API Keys", icon: HiOutlineKey },
+    { id: "tester", label: "Rate Tester", icon: HiOutlineBeaker },
     { id: "settings", label: "Settings", icon: HiOutlineCog },
   ];
 
@@ -67,7 +70,7 @@ export default function Layout({
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="ml-auto lg:hidden text-dark-300 hover:text-white"
+            className="ml-auto lg:hidden text-dark-300 hover:text-white cursor-pointer"
           >
             <HiOutlineX className="w-5 h-5" />
           </button>
