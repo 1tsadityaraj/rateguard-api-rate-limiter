@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const { getMongoStatus } = require("../config/db");
 
 /**
  * POST /api/auth/register
@@ -21,18 +21,39 @@ async function register(req, res) {
         .json({ error: "Password must be at least 6 characters" });
     }
 
-    // Check if user already exists
-    const existing = await User.findOne({
-      $or: [{ email }, { username }],
-    });
+    let user;
 
-    if (existing) {
-      return res
-        .status(409)
-        .json({ error: "User with that email or username already exists" });
+    if (getMongoStatus()) {
+      const User = require("../models/User");
+
+      // Check if user already exists
+      const existing = await User.findOne({
+        $or: [{ email }, { username }],
+      });
+
+      if (existing) {
+        return res
+          .status(409)
+          .json({ error: "User with that email or username already exists" });
+      }
+
+      user = await User.create({ username, email, password });
+    } else {
+      const { UserStore } = require("../services/memoryStore");
+
+      // Check if user already exists
+      const existing = await UserStore.findOne({
+        $or: [{ email }, { username }],
+      });
+
+      if (existing) {
+        return res
+          .status(409)
+          .json({ error: "User with that email or username already exists" });
+      }
+
+      user = await UserStore.create({ username, email, password });
     }
-
-    const user = await User.create({ username, email, password });
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
@@ -70,7 +91,15 @@ async function login(req, res) {
         .json({ error: "email and password are required" });
     }
 
-    const user = await User.findOne({ email }).select("+password");
+    let user;
+
+    if (getMongoStatus()) {
+      const User = require("../models/User");
+      user = await User.findOne({ email }).select("+password");
+    } else {
+      const { UserStore } = require("../services/memoryStore");
+      user = await UserStore.findOne({ email });
+    }
 
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ error: "Invalid credentials" });

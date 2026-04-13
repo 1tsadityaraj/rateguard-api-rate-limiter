@@ -77,9 +77,9 @@ export default function StatsCards({ stats }) {
           <div
             key={card.key}
             className={`
-              glass rounded-2xl p-4 sm:p-5 border ${card.border}
-              hover:scale-[1.02] transition-all duration-300
-              animate-slide-up
+              glass rounded-3xl p-5 border ${card.border}
+              hover:-translate-y-1 hover:shadow-2xl transition-all duration-300
+              animate-slide-up relative overflow-hidden
             `}
             style={{ animationDelay: `${i * 60}ms` }}
           >

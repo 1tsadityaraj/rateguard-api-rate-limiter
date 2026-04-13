@@ -1,9 +1,10 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const { getMongoStatus } = require("../config/db");
 
 /**
  * JWT authentication middleware.
  * Attaches `req.user` on success.
+ * Falls back to in-memory UserStore when MongoDB is unavailable.
  */
 async function authenticate(req, res, next) {
   try {
@@ -15,7 +16,15 @@ async function authenticate(req, res, next) {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await User.findById(decoded.id);
+    let user;
+    if (getMongoStatus()) {
+      const User = require("../models/User");
+      user = await User.findById(decoded.id);
+    } else {
+      const { UserStore } = require("../services/memoryStore");
+      user = await UserStore.findById(decoded.id);
+    }
+
     if (!user) {
       return res.status(401).json({ error: "User not found" });
     }

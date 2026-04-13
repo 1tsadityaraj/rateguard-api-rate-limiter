@@ -3,6 +3,9 @@ const Redis = require("ioredis");
 /**
  * Redis client singleton with automatic reconnection.
  * Used for rate-limit counters, blocked-user lists, and pub/sub.
+ *
+ * When NO_DB=true or Redis is unreachable, provides a disconnected
+ * status so the app falls back to in-memory rate limiting.
  */
 
 let client;
@@ -10,6 +13,29 @@ let isConnected = false;
 
 const createClient = () => {
   if (client) return client;
+
+  // Skip Redis entirely in memory-only mode
+  if (process.env.NO_DB === "true") {
+    console.log("⚡ Redis skipped (memory-only mode)");
+    // Return a stub so callers don't crash
+    client = {
+      _stub: true,
+      on: () => {},
+      get: async () => null,
+      set: async () => "OK",
+      del: async () => 1,
+      keys: async () => [],
+      ttl: async () => -2,
+      incr: async () => 1,
+      expire: async () => 1,
+      eval: async () => [1, 99, 0],
+      zadd: async () => 1,
+      zcard: async () => 0,
+      zrange: async () => [],
+      zremrangebyscore: async () => 0,
+    };
+    return client;
+  }
 
   const options = {
     host: process.env.REDIS_HOST || "127.0.0.1",

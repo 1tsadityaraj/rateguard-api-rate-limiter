@@ -1,5 +1,5 @@
 const { getClient, getConnectionStatus } = require("../services/redisClient");
-const RequestLog = require("../models/RequestLog");
+const { getMongoStatus } = require("../config/db");
 
 // ─── In-memory fallback when Redis is unavailable ───────────────────────────
 const memoryStore = new Map();
@@ -193,9 +193,14 @@ function slidingWindowMemory(identifier, limit, windowSec) {
 // ─── Blocked User Check ────────────────────────────────────────────────────
 async function isBlocked(identifier) {
   try {
-    if (!getConnectionStatus()) return false;
-    const redis = getClient();
-    const ttl = await redis.ttl(`rg:blocked:${identifier}`);
+    if (getConnectionStatus()) {
+      const redis = getClient();
+      const ttl = await redis.ttl(`rg:blocked:${identifier}`);
+      return ttl > 0 ? ttl : false;
+    }
+    // In-memory fallback
+    const { BlockedStore } = require("../services/memoryStore");
+    const ttl = BlockedStore.getTTL(identifier);
     return ttl > 0 ? ttl : false;
   } catch {
     return false;
@@ -204,10 +209,15 @@ async function isBlocked(identifier) {
 
 async function blockUser(identifier, durationMin) {
   try {
-    const redis = getClient();
-    const durationSec = durationMin * 60;
-    await redis.set(`rg:blocked:${identifier}`, "1", "EX", durationSec);
-    return true;
+    if (getConnectionStatus()) {
+      const redis = getClient();
+      const durationSec = durationMin * 60;
+      await redis.set(`rg:blocked:${identifier}`, "1", "EX", durationSec);
+      return true;
+    }
+    // In-memory fallback
+    const { BlockedStore } = require("../services/memoryStore");
+    return BlockedStore.block(identifier, durationMin);
   } catch {
     return false;
   }
@@ -216,16 +226,28 @@ async function blockUser(identifier, durationMin) {
 // ─── Violation Tracking (auto-block after repeated violations) ──────────────
 async function trackViolation(identifier, blockDurationMin) {
   try {
-    const redis = getClient();
-    const violationKey = `rg:violations:${identifier}`;
-    const count = await redis.incr(violationKey);
-    await redis.expire(violationKey, 300); // 5-minute rolling window
+    if (getConnectionStatus()) {
+      const redis = getClient();
+      const violationKey = `rg:violations:${identifier}`;
+      const count = await redis.incr(violationKey);
+      await redis.expire(violationKey, 300); // 5-minute rolling window
 
-    // Auto-block after 5 violations in 5 minutes
+      // Auto-block after 5 violations in 5 minutes
+      if (count >= 5) {
+        await blockUser(identifier, blockDurationMin);
+        await redis.del(violationKey);
+        return true; // user was auto-blocked
+      }
+      return false;
+    }
+
+    // In-memory fallback
+    const { ViolationStore } = require("../services/memoryStore");
+    const count = ViolationStore.increment(identifier);
     if (count >= 5) {
       await blockUser(identifier, blockDurationMin);
-      await redis.del(violationKey);
-      return true; // user was auto-blocked
+      ViolationStore.reset(identifier);
+      return true;
     }
     return false;
   } catch {
@@ -235,7 +257,7 @@ async function trackViolation(identifier, blockDurationMin) {
 
 // ─── Request Logger ─────────────────────────────────────────────────────────
 /**
- * Fire-and-forget log to MongoDB + emit via Socket.io.
+ * Fire-and-forget log to MongoDB (or in-memory) + emit via Socket.io.
  * Never blocks the response.
  */
 function logRequest(req, statusCode, blocked, algorithm) {
@@ -253,10 +275,16 @@ function logRequest(req, statusCode, blocked, algorithm) {
     timestamp: new Date(),
   };
 
-  // Persist to MongoDB (non-blocking)
-  RequestLog.create(logEntry).catch(() => {
-    /* swallow — we don't crash for logging failures */
-  });
+  // Persist to the appropriate store (non-blocking)
+  if (getMongoStatus()) {
+    const RequestLog = require("../models/RequestLog");
+    RequestLog.create(logEntry).catch(() => {
+      /* swallow — we don't crash for logging failures */
+    });
+  } else {
+    const { RequestLogStore } = require("../services/memoryStore");
+    RequestLogStore.create(logEntry).catch(() => {});
+  }
 
   // Emit to Socket.io if available
   if (req.app.get("io")) {

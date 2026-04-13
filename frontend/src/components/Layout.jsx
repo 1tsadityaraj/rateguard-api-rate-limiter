@@ -36,7 +36,11 @@ export default function Layout({
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-dark-900">
+    <div className="flex h-screen overflow-hidden bg-dark-900 bg-grid relative">
+      {/* Background Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-accent-cyan/10 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-accent-purple/10 blur-[120px] pointer-events-none" />
+
       {/* ── Mobile Overlay ── */}
       {sidebarOpen && (
         <div
@@ -170,7 +174,7 @@ export default function Layout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6 sm:p-8 relative z-10 w-full max-w-7xl mx-auto drop-shadow-xl">{children}</main>
       </div>
     </div>
   );

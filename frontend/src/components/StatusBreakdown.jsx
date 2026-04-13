@@ -40,7 +40,7 @@ export default function StatusBreakdown({ statusBreakdown }) {
 
   if (!data.length) {
     return (
-      <div className="glass rounded-2xl border border-white/5 p-6">
+      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
         <h3 className="text-sm font-semibold text-white mb-4">Status Breakdown</h3>
         <div className="h-64 flex items-center justify-center text-dark-400 text-sm">
           No data available
@@ -50,7 +50,7 @@ export default function StatusBreakdown({ statusBreakdown }) {
   }
 
   return (
-    <div className="glass rounded-2xl border border-white/5 p-4 sm:p-6">
+    <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
       <h3 className="text-sm font-semibold text-white mb-4">
         Status Breakdown{" "}
         <span className="text-dark-400 font-normal">(24h)</span>

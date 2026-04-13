@@ -7,7 +7,7 @@ import { HiOutlineArrowRight } from "react-icons/hi";
 export default function LiveFeed({ recentLogs }) {
   if (!recentLogs?.length) {
     return (
-      <div className="glass rounded-2xl border border-white/5 p-5 sm:p-6">
+      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl flex flex-col h-full">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
           Live Request Feed
@@ -20,7 +20,7 @@ export default function LiveFeed({ recentLogs }) {
   }
 
   return (
-    <div className="glass rounded-2xl border border-white/5 p-5 sm:p-6">
+    <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl flex flex-col h-full">
       <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
         Live Request Feed

@@ -1,7 +1,17 @@
-const RequestLog = require("../models/RequestLog");
+const { getMongoStatus } = require("../config/db");
 const { getClient, getConnectionStatus } = require("../services/redisClient");
 const { blockUser } = require("../middleware/rateLimiter");
 const { Parser } = require("json2csv");
+
+/**
+ * Get the appropriate RequestLog store based on DB availability.
+ */
+function getLogStore() {
+  if (getMongoStatus()) {
+    return require("../models/RequestLog");
+  }
+  return require("../services/memoryStore").RequestLogStore;
+}
 
 /**
  * GET /api/stats
@@ -13,6 +23,7 @@ async function getStats(req, res) {
     const oneMinuteAgo = new Date(now - 60_000);
     const oneHourAgo = new Date(now - 3_600_000);
     const oneDayAgo = new Date(now - 86_400_000);
+    const LogStore = getLogStore();
 
     // Run aggregations in parallel
     const [
@@ -25,27 +36,27 @@ async function getStats(req, res) {
       requestTimeline,
     ] = await Promise.all([
       // Requests in the last minute
-      RequestLog.countDocuments({ timestamp: { $gte: oneMinuteAgo } }),
+      LogStore.countDocuments({ timestamp: { $gte: oneMinuteAgo } }),
 
       // Requests in the last hour
-      RequestLog.countDocuments({ timestamp: { $gte: oneHourAgo } }),
+      LogStore.countDocuments({ timestamp: { $gte: oneHourAgo } }),
 
       // Requests in the last 24 hours
-      RequestLog.countDocuments({ timestamp: { $gte: oneDayAgo } }),
+      LogStore.countDocuments({ timestamp: { $gte: oneDayAgo } }),
 
       // Blocked requests today
-      RequestLog.countDocuments({
+      LogStore.countDocuments({
         timestamp: { $gte: oneDayAgo },
         blocked: true,
       }),
 
       // Unique active users/IPs in the last hour
-      RequestLog.distinct("ip", {
+      LogStore.distinct("ip", {
         timestamp: { $gte: oneHourAgo },
       }).then((ips) => ips.length),
 
       // Status code breakdown (last 24h)
-      RequestLog.aggregate([
+      LogStore.aggregate([
         { $match: { timestamp: { $gte: oneDayAgo } } },
         {
           $group: {
@@ -78,7 +89,7 @@ async function getStats(req, res) {
       ]),
 
       // Request timeline (last 60 minutes, grouped per minute)
-      RequestLog.aggregate([
+      LogStore.aggregate([
         { $match: { timestamp: { $gte: oneHourAgo } } },
         {
           $group: {
@@ -98,7 +109,7 @@ async function getStats(req, res) {
       ]),
     ]);
 
-    // Count currently blocked users in Redis
+    // Count currently blocked users
     let blockedUsersCount = 0;
     if (getConnectionStatus()) {
       try {
@@ -108,6 +119,10 @@ async function getStats(req, res) {
       } catch {
         /* ignore */
       }
+    } else {
+      // Use in-memory blocked store
+      const { BlockedStore } = require("../services/memoryStore");
+      blockedUsersCount = BlockedStore.count();
     }
 
     // Convert status breakdown to a cleaner format
@@ -144,8 +159,9 @@ async function getTopUsers(req, res) {
   try {
     const oneHourAgo = new Date(Date.now() - 3_600_000);
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const LogStore = getLogStore();
 
-    const topUsers = await RequestLog.aggregate([
+    const topUsers = await LogStore.aggregate([
       { $match: { timestamp: { $gte: oneHourAgo } } },
       {
         $group: {
@@ -163,6 +179,8 @@ async function getTopUsers(req, res) {
     ]);
 
     // Check block status for each user
+    const { BlockedStore } = require("../services/memoryStore");
+
     const enriched = await Promise.all(
       topUsers.map(async (user) => {
         const identifier = user._id.userId || user._id.ip;
@@ -179,6 +197,13 @@ async function getTopUsers(req, res) {
             }
           } catch {
             /* ignore */
+          }
+        } else {
+          // Check in-memory blocked store
+          const ttl = BlockedStore.getTTL(identifier);
+          if (ttl > 0) {
+            isCurrentlyBlocked = true;
+            blockTTL = ttl;
           }
         }
 
@@ -220,10 +245,17 @@ async function manualBlock(req, res) {
       parseInt(process.env.BLOCK_DURATION_MINUTES, 10) ||
       10;
 
-    const success = await blockUser(identifier, blockDuration);
+    let success;
+    if (getConnectionStatus()) {
+      success = await blockUser(identifier, blockDuration);
+    } else {
+      // Use in-memory blocked store
+      const { BlockedStore } = require("../services/memoryStore");
+      success = BlockedStore.block(identifier, blockDuration);
+    }
 
     if (!success) {
-      return res.status(500).json({ error: "Failed to block user (Redis unavailable)" });
+      return res.status(500).json({ error: "Failed to block user" });
     }
 
     // Emit block event
@@ -258,12 +290,13 @@ async function unblockUser(req, res) {
       return res.status(400).json({ error: "identifier is required" });
     }
 
-    if (!getConnectionStatus()) {
-      return res.status(500).json({ error: "Redis unavailable" });
+    if (getConnectionStatus()) {
+      const redis = getClient();
+      await redis.del(`rg:blocked:${identifier}`);
+    } else {
+      const { BlockedStore } = require("../services/memoryStore");
+      BlockedStore.unblock(identifier);
     }
-
-    const redis = getClient();
-    await redis.del(`rg:blocked:${identifier}`);
 
     if (req.app.get("io")) {
       req.app.get("io").emit("user-unblocked", { identifier });
@@ -282,25 +315,25 @@ async function unblockUser(req, res) {
  */
 async function getBlockedUsers(req, res) {
   try {
-    if (!getConnectionStatus()) {
-      return res.json([]);
+    if (getConnectionStatus()) {
+      const redis = getClient();
+      const keys = await redis.keys("rg:blocked:*");
+
+      const blockedUsers = await Promise.all(
+        keys.map(async (key) => {
+          const identifier = key.replace("rg:blocked:", "");
+          const ttl = await redis.ttl(key);
+          return { identifier, ttl, expiresAt: new Date(Date.now() + ttl * 1000) };
+        })
+      );
+
+      blockedUsers.sort((a, b) => b.ttl - a.ttl);
+      return res.json(blockedUsers);
     }
 
-    const redis = getClient();
-    const keys = await redis.keys("rg:blocked:*");
-
-    const blockedUsers = await Promise.all(
-      keys.map(async (key) => {
-        const identifier = key.replace("rg:blocked:", "");
-        const ttl = await redis.ttl(key);
-        return { identifier, ttl, expiresAt: new Date(Date.now() + ttl * 1000) };
-      })
-    );
-
-    // Sort by TTL descending (most time remaining first)
-    blockedUsers.sort((a, b) => b.ttl - a.ttl);
-
-    res.json(blockedUsers);
+    // Use in-memory blocked store
+    const { BlockedStore } = require("../services/memoryStore");
+    res.json(BlockedStore.getAll());
   } catch (err) {
     console.error("Blocked users error:", err);
     res.status(500).json({ error: "Failed to fetch blocked users" });
@@ -314,22 +347,35 @@ async function getBlockedUsers(req, res) {
 async function healthCheck(req, res) {
   const mongoose = require("mongoose");
 
+  const mongoStatus = getMongoStatus()
+    ? "connected"
+    : process.env.NO_DB === "true"
+    ? "disabled (memory mode)"
+    : "disconnected";
+
+  const redisStatus = getConnectionStatus()
+    ? "connected"
+    : process.env.NO_DB === "true"
+    ? "disabled (memory mode)"
+    : "disconnected";
+
   const health = {
     status: "ok",
     uptime: process.uptime(),
     timestamp: new Date(),
+    mode: process.env.NO_DB === "true" ? "memory-only (trial)" : "production",
     services: {
-      redis: getConnectionStatus() ? "connected" : "disconnected",
-      mongodb:
-        mongoose.connection.readyState === 1
-          ? "connected"
-          : "disconnected",
+      redis: redisStatus,
+      mongodb: mongoStatus,
     },
   };
 
+  // In memory mode, we're always "healthy"
   const httpStatus =
-    health.services.redis === "connected" &&
-    health.services.mongodb === "connected"
+    process.env.NO_DB === "true"
+      ? 200
+      : health.services.redis === "connected" &&
+        health.services.mongodb === "connected"
       ? 200
       : 503;
 
@@ -344,8 +390,9 @@ async function exportLogs(req, res) {
   try {
     const hours = parseInt(req.query.hours, 10) || 24;
     const since = new Date(Date.now() - hours * 3_600_000);
+    const LogStore = getLogStore();
 
-    const logs = await RequestLog.find({ timestamp: { $gte: since } })
+    const logs = await LogStore.find({ timestamp: { $gte: since } })
       .sort({ timestamp: -1 })
       .limit(10_000)
       .lean();
@@ -384,8 +431,9 @@ async function exportLogs(req, res) {
 async function getAlerts(req, res) {
   try {
     const fiveMinAgo = new Date(Date.now() - 300_000);
+    const LogStore = getLogStore();
 
-    const spikes = await RequestLog.aggregate([
+    const spikes = await LogStore.aggregate([
       { $match: { timestamp: { $gte: fiveMinAgo } } },
       {
         $group: {

@@ -43,7 +43,7 @@ export default function RequestChart({ timeline }) {
 
   if (!data.length) {
     return (
-      <div className="glass rounded-2xl border border-white/5 p-6">
+      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
         <h3 className="text-sm font-semibold text-white mb-4">
           Request Timeline
         </h3>
@@ -55,7 +55,7 @@ export default function RequestChart({ timeline }) {
   }
 
   return (
-    <div className="glass rounded-2xl border border-white/5 p-4 sm:p-6">
+    <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
       <h3 className="text-sm font-semibold text-white mb-4">
         Request Timeline{" "}
         <span className="text-dark-400 font-normal">(Last 60 min)</span>

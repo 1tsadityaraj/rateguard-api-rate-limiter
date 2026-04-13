@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require("uuid");
-const ApiKey = require("../models/ApiKey");
+const { getMongoStatus } = require("../config/db");
 
 /**
  * POST /api/keys
@@ -15,12 +15,25 @@ async function createKey(req, res) {
 
     const key = `rg_${tier === "pro" ? "pro" : "free"}_${uuidv4().replace(/-/g, "")}`;
 
-    const apiKey = await ApiKey.create({
-      key,
-      name,
-      userId,
-      tier: tier || "free",
-    });
+    let apiKey;
+
+    if (getMongoStatus()) {
+      const ApiKey = require("../models/ApiKey");
+      apiKey = await ApiKey.create({
+        key,
+        name,
+        userId,
+        tier: tier || "free",
+      });
+    } else {
+      const { ApiKeyStore } = require("../services/memoryStore");
+      apiKey = await ApiKeyStore.create({
+        key,
+        name,
+        userId,
+        tier: tier || "free",
+      });
+    }
 
     res.status(201).json({
       message: "API key created",
@@ -44,9 +57,18 @@ async function createKey(req, res) {
  */
 async function listKeys(req, res) {
   try {
-    const keys = await ApiKey.find()
-      .select("-__v")
-      .sort({ createdAt: -1 });
+    let keys;
+
+    if (getMongoStatus()) {
+      const ApiKey = require("../models/ApiKey");
+      keys = await ApiKey.find()
+        .select("-__v")
+        .sort({ createdAt: -1 });
+    } else {
+      const { ApiKeyStore } = require("../services/memoryStore");
+      keys = await ApiKeyStore.findSorted();
+    }
+
     res.json(keys);
   } catch (err) {
     console.error("List keys error:", err);
@@ -60,11 +82,19 @@ async function listKeys(req, res) {
  */
 async function revokeKey(req, res) {
   try {
-    const key = await ApiKey.findByIdAndUpdate(
-      req.params.id,
-      { active: false },
-      { new: true }
-    );
+    let key;
+
+    if (getMongoStatus()) {
+      const ApiKey = require("../models/ApiKey");
+      key = await ApiKey.findByIdAndUpdate(
+        req.params.id,
+        { active: false },
+        { new: true }
+      );
+    } else {
+      const { ApiKeyStore } = require("../services/memoryStore");
+      key = await ApiKeyStore.findByIdAndUpdate(req.params.id, { active: false });
+    }
 
     if (!key) {
       return res.status(404).json({ error: "API key not found" });

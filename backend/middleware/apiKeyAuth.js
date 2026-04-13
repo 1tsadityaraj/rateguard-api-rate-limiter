@@ -1,4 +1,4 @@
-const ApiKey = require("../models/ApiKey");
+const { getMongoStatus } = require("../config/db");
 
 /**
  * API Key authentication middleware.
@@ -17,7 +17,15 @@ async function apiKeyAuth(req, res, next) {
   }
 
   try {
-    const apiKey = await ApiKey.findOne({ key, active: true });
+    let apiKey;
+
+    if (getMongoStatus()) {
+      const ApiKey = require("../models/ApiKey");
+      apiKey = await ApiKey.findOne({ key, active: true });
+    } else {
+      const { ApiKeyStore } = require("../services/memoryStore");
+      apiKey = await ApiKeyStore.findOne({ key, active: true });
+    }
 
     if (!apiKey) {
       return res.status(401).json({ error: "Invalid or inactive API key" });
@@ -29,9 +37,17 @@ async function apiKeyAuth(req, res, next) {
     req.userId = apiKey.userId;
 
     // Increment usage counter (fire-and-forget)
-    ApiKey.updateOne({ _id: apiKey._id }, { $inc: { requestCount: 1 } }).catch(
-      () => {}
-    );
+    if (getMongoStatus()) {
+      const ApiKey = require("../models/ApiKey");
+      ApiKey.updateOne({ _id: apiKey._id }, { $inc: { requestCount: 1 } }).catch(
+        () => {}
+      );
+    } else {
+      const { ApiKeyStore } = require("../services/memoryStore");
+      ApiKeyStore.findByIdAndUpdate(apiKey._id, { $inc: { requestCount: 1 } }).catch(
+        () => {}
+      );
+    }
 
     next();
   } catch (err) {
