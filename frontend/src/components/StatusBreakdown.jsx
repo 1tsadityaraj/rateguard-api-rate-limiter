@@ -42,8 +42,12 @@ export default function StatusBreakdown({ statusBreakdown }) {
     return (
       <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
         <h3 className="text-sm font-semibold text-white mb-4">Status Breakdown</h3>
-        <div className="h-64 flex items-center justify-center text-dark-400 text-sm">
-          No data available
+        <div className="h-64 flex flex-col items-center justify-center gap-2">
+          <div className="w-16 h-16 rounded-full border-4 border-dashed border-dark-400/50 mb-2 flex items-center justify-center">
+            <span className="text-lg">📊</span>
+          </div>
+          <p className="text-sm font-medium text-white">No data available</p>
+          <p className="text-xs text-dark-400">Waiting for API traffic...</p>
         </div>
       </div>
     );

@@ -33,7 +33,12 @@ export default function TopUsersTable({ topUsers, onRefresh }) {
         <h3 className="text-sm font-semibold text-white mb-4">
           Top Users / IPs
         </h3>
-        <p className="text-sm text-dark-400">No user data available yet</p>
+        <div className="flex flex-col items-center justify-center py-8">
+          <p className="text-sm font-medium text-white">No active users</p>
+          <p className="text-xs text-dark-400 text-center mt-1">
+            Generate traffic to see the most active API clients here.
+          </p>
+        </div>
       </div>
     );
   }

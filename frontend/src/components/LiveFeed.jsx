@@ -12,9 +12,15 @@ export default function LiveFeed({ recentLogs }) {
           <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
           Live Request Feed
         </h3>
-        <p className="text-xs text-dark-400 text-center py-8">
-          Waiting for incoming requests...
-        </p>
+        <div className="flex-1 flex flex-col items-center justify-center my-6 gap-2">
+          <div className="w-12 h-12 rounded-full bg-dark-800/80 flex items-center justify-center mb-2">
+            <span className="text-xl">📡</span>
+          </div>
+          <p className="text-sm font-medium text-white">No live requests yet</p>
+          <p className="text-xs text-dark-400 text-center max-w-[200px]">
+            Start testing your API to see real-time traffic flow here.
+          </p>
+        </div>
       </div>
     );
   }

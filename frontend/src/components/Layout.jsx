@@ -157,10 +157,10 @@ export default function Layout({
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold uppercase tracking-widest ${
                 connected
-                  ? "bg-success/10 text-success"
-                  : "bg-danger/10 text-danger"
+                  ? "bg-success/10 text-success border border-success/20 shadow-[0_0_15px_rgba(6,214,160,0.15)]"
+                  : "bg-danger/10 text-danger border border-danger/20"
               }`}
             >
               <span
@@ -168,7 +168,7 @@ export default function Layout({
                   connected ? "bg-success animate-pulse" : "bg-danger"
                 }`}
               />
-              {connected ? "Live" : "Offline"}
+              {connected ? "Live Monitoring Active" : "Offline"}
             </span>
           </div>
         </header>

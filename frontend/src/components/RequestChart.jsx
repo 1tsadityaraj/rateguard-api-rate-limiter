@@ -47,8 +47,11 @@ export default function RequestChart({ timeline }) {
         <h3 className="text-sm font-semibold text-white mb-4">
           Request Timeline
         </h3>
-        <div className="h-64 flex items-center justify-center text-dark-400 text-sm">
-          No timeline data available yet
+        <div className="h-64 flex flex-col items-center justify-center gap-2">
+          <p className="text-sm font-semibold text-white">No traffic yet 🚀</p>
+          <p className="text-xs text-dark-400 mb-4 max-w-sm text-center">
+            Start sending requests using the Rate Tester to see live analytics.
+          </p>
         </div>
       </div>
     );

@@ -95,6 +95,12 @@ export default function StatsCards({ stats }) {
               {typeof value === "number" ? value.toLocaleString() : value}
             </p>
             <p className="text-xs text-dark-300 mt-1 font-medium">{card.label}</p>
+            {value === 0 && (
+              <p className="text-[10px] text-dark-400 mt-2 italic flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-dark-400 shrink-0" />
+                Waiting for traffic...
+              </p>
+            )}
           </div>
         );
       })}
