@@ -6,7 +6,7 @@ import { blockUser, unblockUser } from "../services/api";
  * Table of the most active users/IPs in the last hour.
  * Allows manual blocking/unblocking directly from the table.
  */
-export default function TopUsersTable({ topUsers, onRefresh }) {
+export default function TopUsersTable({ topUsers, onRefresh, onNavigateToTester }) {
   const handleBlock = async (identifier) => {
     try {
       await blockUser(identifier, 10);
@@ -29,15 +29,26 @@ export default function TopUsersTable({ topUsers, onRefresh }) {
 
   if (!topUsers?.length) {
     return (
-      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
+      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full flex flex-col">
         <h3 className="text-sm font-semibold text-white mb-4">
           Top Users / IPs
         </h3>
-        <div className="flex flex-col items-center justify-center py-8">
-          <p className="text-sm font-medium text-white">No active users</p>
-          <p className="text-xs text-dark-400 text-center mt-1">
+        <div className="flex-1 flex flex-col items-center justify-center py-12 gap-3 min-h-[250px]">
+          <div className="w-16 h-16 rounded-full bg-dark-800/80 flex items-center justify-center mb-2 shadow-inner border border-white/5">
+            <span className="text-2xl">👥</span>
+          </div>
+          <p className="text-base font-semibold text-white">No active users</p>
+          <p className="text-sm text-dark-400 text-center max-w-md">
             Generate traffic to see the most active API clients here.
           </p>
+          {onNavigateToTester && (
+            <button
+              onClick={onNavigateToTester}
+              className="px-4 py-2 mt-3 rounded-xl bg-indigo-500/10 text-indigo-400 text-sm font-medium hover:bg-indigo-500/20 border border-indigo-500/20 transition-all duration-300 hover:scale-[1.02] cursor-pointer"
+            >
+              Generate Traffic
+            </button>
+          )}
         </div>
       </div>
     );

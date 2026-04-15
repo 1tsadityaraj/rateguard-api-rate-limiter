@@ -79,7 +79,13 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
-        return <Dashboard />;
+        return (
+          <Dashboard 
+            onNavigateToTester={() => setActiveTab("tester")}
+            onNavigateToBlocked={() => setActiveTab("blocked")}
+            onNavigateToKeys={() => setActiveTab("apikeys")}
+          />
+        );
       case "blocked":
         return <BlockedUsersTable blockedUsers={blockedUsers} onRefresh={refresh} />;
       case "alerts":

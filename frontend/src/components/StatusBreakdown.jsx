@@ -30,7 +30,7 @@ function CustomTooltip({ active, payload }) {
 /**
  * Donut chart showing status code distribution.
  */
-export default function StatusBreakdown({ statusBreakdown }) {
+export default function StatusBreakdown({ statusBreakdown, onNavigateToTester }) {
   const data = Object.entries(statusBreakdown || {}).map(([key, value]) => ({
     name: key,
     value,
@@ -40,14 +40,24 @@ export default function StatusBreakdown({ statusBreakdown }) {
 
   if (!data.length) {
     return (
-      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
+      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full">
         <h3 className="text-sm font-semibold text-white mb-4">Status Breakdown</h3>
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
+        <div className="h-64 flex flex-col items-center justify-center gap-3">
           <div className="w-16 h-16 rounded-full border-4 border-dashed border-dark-400/50 mb-2 flex items-center justify-center">
-            <span className="text-lg">📊</span>
+            <span className="text-xl">📊</span>
           </div>
-          <p className="text-sm font-medium text-white">No data available</p>
-          <p className="text-xs text-dark-400">Waiting for API traffic...</p>
+          <p className="text-base font-semibold text-white">No data available</p>
+          <p className="text-sm text-dark-400 text-center max-w-[200px]">
+            Waiting for API traffic to generate status code distribution.
+          </p>
+          {onNavigateToTester && (
+            <button
+              onClick={onNavigateToTester}
+              className="px-4 py-2 mt-2 rounded-xl bg-white/5 text-white text-sm font-medium hover:bg-white/10 border border-white/10 transition-all duration-300 hover:scale-105 cursor-pointer"
+            >
+              Test API
+            </button>
+          )}
         </div>
       </div>
     );

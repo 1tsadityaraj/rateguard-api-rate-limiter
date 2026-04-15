@@ -34,7 +34,7 @@ function CustomTooltip({ active, payload, label }) {
 /**
  * Area chart showing request volume + blocked requests over time.
  */
-export default function RequestChart({ timeline }) {
+export default function RequestChart({ timeline, onNavigateToTester }) {
   // Format time labels to be shorter (HH:MM)
   const data = (timeline || []).map((item) => ({
     ...item,
@@ -43,15 +43,26 @@ export default function RequestChart({ timeline }) {
 
   if (!data.length) {
     return (
-      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
+      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full">
         <h3 className="text-sm font-semibold text-white mb-4">
           Request Timeline
         </h3>
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
-          <p className="text-sm font-semibold text-white">No traffic yet 🚀</p>
-          <p className="text-xs text-dark-400 mb-4 max-w-sm text-center">
-            Start sending requests using the Rate Tester to see live analytics.
+        <div className="h-64 flex flex-col items-center justify-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-dark-800/80 flex items-center justify-center mb-2 shadow-inner border border-white/5">
+            <span className="text-2xl">📈</span>
+          </div>
+          <p className="text-base font-semibold text-white">No traffic yet 🚀</p>
+          <p className="text-sm text-dark-400 mb-2 max-w-sm text-center">
+            Start sending requests using the Rate Tester to see live analytics on this timeline.
           </p>
+          {onNavigateToTester && (
+            <button
+              onClick={onNavigateToTester}
+              className="px-4 py-2 mt-2 rounded-xl bg-accent-purple/10 text-accent-purple text-sm font-medium hover:bg-accent-purple/20 transition-all duration-300 hover:scale-105 cursor-pointer"
+            >
+              Open Rate Tester
+            </button>
+          )}
         </div>
       </div>
     );

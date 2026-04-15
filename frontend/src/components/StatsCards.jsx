@@ -77,30 +77,40 @@ export default function StatsCards({ stats }) {
           <div
             key={card.key}
             className={`
-              glass rounded-3xl p-5 border ${card.border}
-              hover:-translate-y-1 hover:shadow-2xl transition-all duration-300
-              animate-slide-up relative overflow-hidden
+              glass rounded-3xl p-5 border ${card.border} bg-gradient-to-b from-white/[0.02] to-transparent
+              hover:scale-[1.02] hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.5)] 
+              transition-all duration-300 relative overflow-hidden group
             `}
             style={{ animationDelay: `${i * 60}ms` }}
           >
-            <div
-              className={`
-                w-9 h-9 rounded-xl bg-gradient-to-br ${card.gradient}
-                flex items-center justify-center mb-3
-              `}
-            >
-              <Icon className={`w-5 h-5 ${card.text}`} />
+            <div className="flex items-center gap-3 mb-4">
+              <div
+                className={`
+                  w-10 h-10 rounded-xl bg-gradient-to-br ${card.gradient} shadow-inner
+                  flex items-center justify-center border border-white/5
+                  group-hover:scale-110 transition-transform duration-300
+                `}
+              >
+                <Icon className={`w-5 h-5 ${card.text}`} />
+              </div>
+              <p className="text-sm text-dark-300 font-medium tracking-wide">{card.label}</p>
             </div>
-            <p className="text-2xl sm:text-3xl font-bold text-white tabular-nums">
+            <p className="text-3xl sm:text-4xl font-extrabold text-white tabular-nums tracking-tight">
               {typeof value === "number" ? value.toLocaleString() : value}
             </p>
-            <p className="text-xs text-dark-300 mt-1 font-medium">{card.label}</p>
-            {value === 0 && (
-              <p className="text-[10px] text-dark-400 mt-2 italic flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-dark-400 shrink-0" />
-                Waiting for traffic...
-              </p>
-            )}
+            <div className="mt-3">
+              {value === 0 || value === "—" ? (
+                <p className="text-xs text-dark-400 mt-2 flex items-center gap-1.5 opacity-80">
+                  <span className="w-1.5 h-1.5 rounded-full bg-dark-500 shrink-0" />
+                  No activity yet
+                </p>
+              ) : (
+                <p className="text-xs text-success flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+                  Updated just now
+                </p>
+              )}
+            </div>
           </div>
         );
       })}
