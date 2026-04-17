@@ -19,18 +19,9 @@ function App() {
 
   // Check for existing JWT on mount
   useEffect(() => {
-    const token = localStorage.getItem("rateguard_token");
-    if (token) {
-      getMe()
-        .then((data) => setUser(data.user))
-        .catch(() => {
-          // Token expired or invalid — clear it
-          localStorage.removeItem("rateguard_token");
-        })
-        .finally(() => setAuthChecked(true));
-    } else {
-      setAuthChecked(true);
-    }
+    // For development/demo: Bypass login and directly load dashboard
+    setUser({ username: "Admin", email: "admin@rateguard.app", role: "admin" });
+    setAuthChecked(true);
   }, []);
 
   const handleAuth = (result) => {
@@ -38,8 +29,9 @@ function App() {
   };
 
   const handleLogout = () => {
-    logout();
-    setUser(null);
+    // logout();
+    // setUser(null);
+    toast.success("Logout disabled in demo mode.");
   };
 
   // Show loading while checking auth
@@ -51,27 +43,6 @@ function App() {
           <p className="text-xs text-dark-400">Loading...</p>
         </div>
       </div>
-    );
-  }
-
-  // Show login page if not authenticated
-  if (!user) {
-    return (
-      <>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            style: {
-              background: "#1e1e2e",
-              color: "#e2e8f0",
-              borderRadius: "12px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              fontSize: "13px",
-            },
-          }}
-        />
-        <LoginPage onAuth={handleAuth} />
-      </>
     );
   }
 
