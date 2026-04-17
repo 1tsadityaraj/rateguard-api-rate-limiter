@@ -3,64 +3,55 @@ import {
   HiOutlineBan,
   HiOutlineUsers,
   HiOutlineClock,
-  HiOutlineShieldCheck,
   HiOutlineChartBar,
 } from "react-icons/hi";
 
 const cards = [
   {
     key: "requestsPerMinute",
-    label: "Requests / Min",
-    icon: HiOutlineLightningBolt,
+    label: "REQ / MIN",
+    icon: "⚡",
     color: "cyan",
-    gradient: "from-accent-cyan/20 to-accent-cyan/5",
-    border: "border-accent-cyan/20",
+    border: "border-t-accent-cyan",
     text: "text-accent-cyan",
+    emptyText: "Waiting for traffic...",
   },
   {
     key: "requestsPerHour",
-    label: "Requests / Hour",
-    icon: HiOutlineClock,
+    label: "REQ / HOUR",
+    icon: "📊",
     color: "blue",
-    gradient: "from-accent-blue/20 to-accent-blue/5",
-    border: "border-accent-blue/20",
+    border: "border-t-accent-blue",
     text: "text-accent-blue",
-  },
-  {
-    key: "requestsPerDay",
-    label: "Requests / Day",
-    icon: HiOutlineChartBar,
-    color: "purple",
-    gradient: "from-accent-purple/20 to-accent-purple/5",
-    border: "border-accent-purple/20",
-    text: "text-accent-purple",
+    emptyText: "No activity yet",
   },
   {
     key: "blockedRequests",
-    label: "Blocked Today",
-    icon: HiOutlineBan,
+    label: "BLOCKED",
+    icon: "🚫",
     color: "pink",
-    gradient: "from-accent-pink/20 to-accent-pink/5",
-    border: "border-accent-pink/20",
+    border: "border-t-accent-pink",
     text: "text-accent-pink",
+    emptyText: "No blocked IPs",
   },
   {
     key: "activeUsers",
-    label: "Active Users",
-    icon: HiOutlineUsers,
+    label: "ACTIVE USERS",
+    icon: "👥",
     color: "orange",
-    gradient: "from-accent-orange/20 to-accent-orange/5",
-    border: "border-accent-orange/20",
+    border: "border-t-accent-orange",
     text: "text-accent-orange",
+    emptyText: "Idle",
   },
   {
-    key: "blockedUsersCount",
-    label: "Blocked Users",
-    icon: HiOutlineShieldCheck,
-    color: "yellow",
-    gradient: "from-accent-yellow/20 to-accent-yellow/5",
-    border: "border-accent-yellow/20",
-    text: "text-accent-yellow",
+    key: "avgLatency",
+    label: "AVG LATENCY",
+    icon: "⏱️",
+    color: "purple",
+    border: "border-t-accent-purple",
+    text: "text-accent-purple",
+    emptyText: "Waiting...",
+    suffix: "ms",
   },
 ];
 
@@ -69,40 +60,42 @@ const cards = [
  */
 export default function StatsCards({ stats }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
       {cards.map((card, i) => {
-        const Icon = card.icon;
-        const value = stats?.[card.key] ?? "—";
+        const rawValue = stats?.[card.key];
+        const value = rawValue ?? "—";
+        const displayValue = typeof value === "number" && card.suffix 
+          ? `${value}${card.suffix}` 
+          : (typeof value === "number" ? value.toLocaleString() : value);
+
         return (
           <div
             key={card.key}
             className={`
-              glass rounded-3xl p-5 border ${card.border} bg-gradient-to-b from-white/[0.02] to-transparent
-              hover:scale-[1.02] hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.5)] 
+              glass rounded-2xl p-4 sm:p-5 border border-white/10 border-t-2 ${card.border}
+              hover:scale-[1.02] hover:-translate-y-0.5 hover:shadow-[0_8px_30px_rgb(0,0,0,0.5)] 
               transition-all duration-300 relative overflow-hidden group
             `}
             style={{ animationDelay: `${i * 60}ms` }}
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className={`
-                  w-10 h-10 rounded-xl bg-gradient-to-br ${card.gradient} shadow-inner
-                  flex items-center justify-center border border-white/5
-                  group-hover:scale-110 transition-transform duration-300
-                `}
-              >
-                <Icon className={`w-5 h-5 ${card.text}`} />
-              </div>
-              <p className="text-sm text-dark-300 font-medium tracking-wide">{card.label}</p>
+            {/* Header row: label + icon */}
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] text-dark-300 font-semibold tracking-widest uppercase">
+                {card.label}
+              </p>
+              <span className="text-lg opacity-80">{card.icon}</span>
             </div>
+
+            {/* Value */}
             <p className="text-3xl sm:text-4xl font-extrabold text-white tabular-nums tracking-tight">
-              {typeof value === "number" ? value.toLocaleString() : value}
+              {displayValue}
             </p>
-            <div className="mt-3">
+
+            {/* Subtitle */}
+            <div className="mt-2">
               {value === 0 || value === "—" ? (
-                <p className="text-xs text-dark-400 mt-2 flex items-center gap-1.5 opacity-80">
-                  <span className="w-1.5 h-1.5 rounded-full bg-dark-500 shrink-0" />
-                  No activity yet
+                <p className="text-xs text-dark-400 opacity-70">
+                  {card.emptyText}
                 </p>
               ) : (
                 <p className="text-xs text-success flex items-center gap-1.5">

@@ -29,51 +29,48 @@ export default function TopUsersTable({ topUsers, onRefresh, onNavigateToTester 
 
   if (!topUsers?.length) {
     return (
-      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full flex flex-col">
-        <h3 className="text-sm font-semibold text-white mb-4">
-          Top Users / IPs
-        </h3>
-        <div className="flex-1 flex flex-col items-center justify-center py-12 gap-3 min-h-[250px]">
-          <div className="w-16 h-16 rounded-full bg-dark-800/80 flex items-center justify-center mb-2 shadow-inner border border-white/5">
-            <span className="text-2xl">👥</span>
-          </div>
-          <p className="text-base font-semibold text-white">No active users</p>
+      <div className="glass rounded-2xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full flex flex-col min-h-[350px]">
+        <div className="flex items-baseline gap-2 mb-5">
+          <h3 className="text-base font-bold text-white tracking-tight">
+            Top IPs / Users
+          </h3>
+          <span className="text-xs text-dark-400">By request volume</span>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center py-8 gap-2">
+          <p className="text-base font-semibold text-white">No traffic data yet</p>
           <p className="text-sm text-dark-400 text-center max-w-md">
-            Generate traffic to see the most active API clients here.
+            Start testing your API to see user stats here
           </p>
-          {onNavigateToTester && (
-            <button
-              onClick={onNavigateToTester}
-              className="px-4 py-2 mt-3 rounded-xl bg-indigo-500/10 text-indigo-400 text-sm font-medium hover:bg-indigo-500/20 border border-indigo-500/20 transition-all duration-300 hover:scale-[1.02] cursor-pointer"
-            >
-              Generate Traffic
-            </button>
-          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
-      <h3 className="text-sm font-semibold text-white mb-4">
-        Top Users / IPs{" "}
-        <span className="text-dark-400 font-normal">(Last hour)</span>
-      </h3>
+    <div className="glass rounded-2xl border border-white/10 p-5 sm:p-6 shadow-2xl">
+      <div className="flex items-baseline gap-2 mb-5">
+        <h3 className="text-base font-bold text-white tracking-tight">
+          Top IPs / Users
+        </h3>
+        <span className="text-xs text-dark-400">By request volume</span>
+      </div>
       <div className="overflow-x-auto -mx-4 sm:-mx-6">
         <div className="min-w-[600px] px-4 sm:px-6">
           {/* Header */}
           <div className="grid grid-cols-12 gap-2 pb-3 border-b border-white/5 text-[11px] text-dark-400 uppercase tracking-wider font-medium">
             <div className="col-span-3">Identifier</div>
-            <div className="col-span-2 text-right">Requests</div>
-            <div className="col-span-2 text-right">Blocked</div>
-            <div className="col-span-3">Last Seen</div>
+            <div className="col-span-3">Requests</div>
+            <div className="col-span-1 text-right">Blocked</div>
+            <div className="col-span-3 text-center">Last Seen</div>
             <div className="col-span-2 text-right">Action</div>
           </div>
 
           {/* Rows */}
           {topUsers.map((user, i) => {
             const identifier = user.userId || user.ip;
+            const maxRequestCount = Math.max(...topUsers.map(u => u.requestCount || 0));
+            const percentage = maxRequestCount > 0 ? (user.requestCount / maxRequestCount) * 100 : 0;
+            
             return (
               <div
                 key={i}
@@ -87,10 +84,18 @@ export default function TopUsersTable({ topUsers, onRefresh, onNavigateToTester 
                     {identifier}
                   </span>
                 </div>
-                <div className="col-span-2 text-right text-sm text-white font-semibold tabular-nums">
-                  {user.requestCount.toLocaleString()}
+                <div className="col-span-3 flex items-center pr-4">
+                  <div className="flex-1 max-w-[120px] h-1.5 bg-dark-600 rounded-full overflow-hidden mr-3">
+                    <div 
+                      className="h-full bg-gradient-to-r from-accent-blue to-accent-cyan rounded-full"
+                      style={{ width: `${percentage}%` }}
+                    />
+                  </div>
+                  <span className="text-sm text-white font-semibold tabular-nums w-12">
+                    {user.requestCount.toLocaleString()}
+                  </span>
                 </div>
-                <div className="col-span-2 text-right">
+                <div className="col-span-1 text-right">
                   {user.blockedCount > 0 ? (
                     <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-danger/10 text-danger text-xs font-medium">
                       {user.blockedCount}
@@ -99,7 +104,7 @@ export default function TopUsersTable({ topUsers, onRefresh, onNavigateToTester 
                     <span className="text-xs text-dark-400">0</span>
                   )}
                 </div>
-                <div className="col-span-3 text-xs text-dark-300">
+                <div className="col-span-3 text-xs text-dark-300 text-center">
                   {user.lastRequest
                     ? new Date(user.lastRequest).toLocaleTimeString()
                     : "—"}

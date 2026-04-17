@@ -40,8 +40,13 @@ export default function StatusBreakdown({ statusBreakdown, onNavigateToTester })
 
   if (!data.length) {
     return (
-      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full">
-        <h3 className="text-sm font-semibold text-white mb-4">Status Breakdown</h3>
+      <div className="glass rounded-2xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full">
+        <div className="flex items-baseline justify-between mb-4">
+          <h3 className="text-base font-bold text-white tracking-tight">
+            Status Breakdown
+          </h3>
+          <span className="text-xs text-dark-400">Live snapshot</span>
+        </div>
         <div className="h-64 flex flex-col items-center justify-center gap-3">
           <div className="w-16 h-16 rounded-full border-4 border-dashed border-dark-400/50 mb-2 flex items-center justify-center">
             <span className="text-xl">📊</span>
@@ -64,11 +69,13 @@ export default function StatusBreakdown({ statusBreakdown, onNavigateToTester })
   }
 
   return (
-    <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
-      <h3 className="text-sm font-semibold text-white mb-4">
-        Status Breakdown{" "}
-        <span className="text-dark-400 font-normal">(24h)</span>
-      </h3>
+    <div className="glass rounded-2xl border border-white/10 p-5 sm:p-6 shadow-2xl">
+      <div className="flex items-baseline justify-between mb-4">
+        <h3 className="text-base font-bold text-white tracking-tight">
+          Status Breakdown
+        </h3>
+        <span className="text-xs text-dark-400">Live snapshot</span>
+      </div>
       <div className="flex flex-col items-center">
         <div className="relative w-full" style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">

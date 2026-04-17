@@ -61,15 +61,12 @@ export default function Layout({
       >
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-white/5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-accent-cyan to-accent-purple flex items-center justify-center">
-            <HiOutlineShieldCheck className="w-5 h-5 text-white" />
-          </div>
           <div>
             <h1 className="text-lg font-bold text-white tracking-tight">
               RateGuard
             </h1>
-            <p className="text-[10px] text-dark-300 uppercase tracking-widest">
-              Rate Limiter
+            <p className="text-[11px] text-dark-300 tracking-wide">
+              API Rate Limiter
             </p>
           </div>
           <button
@@ -83,7 +80,6 @@ export default function Layout({
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const Icon = item.icon;
             const active = activeTab === item.id;
             return (
               <button
@@ -102,7 +98,11 @@ export default function Layout({
                   }
                 `}
               >
-                <Icon className={`w-5 h-5 ${active ? "text-accent-cyan" : ""}`} />
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    active ? "bg-accent-cyan" : "bg-dark-400"
+                  }`}
+                />
                 {item.label}
                 {item.id === "alerts" && (
                   <span className="ml-auto w-2 h-2 rounded-full bg-accent-pink animate-pulse" />
@@ -112,8 +112,18 @@ export default function Layout({
           })}
         </nav>
 
-        {/* Connection status + user */}
+        {/* Bottom: Current Plan + User */}
         <div className="px-4 py-4 border-t border-white/5 space-y-3">
+          {/* Current Plan */}
+          <div className="space-y-1.5">
+            <p className="text-[11px] text-dark-400 tracking-wide">Current Plan</p>
+            <span className="inline-block px-2.5 py-1 rounded-md bg-accent-cyan/10 text-accent-cyan text-[11px] font-bold uppercase tracking-widest border border-accent-cyan/20">
+              PRO TIER
+            </span>
+            <p className="text-xs text-dark-300">1,000 req/min</p>
+          </div>
+
+          {/* Connection status */}
           <div className="flex items-center gap-2 text-xs">
             <HiOutlineStatusOnline
               className={`w-4 h-4 ${connected ? "text-success" : "text-danger"}`}
@@ -122,6 +132,8 @@ export default function Layout({
               {connected ? "Live Connected" : "Disconnected"}
             </span>
           </div>
+
+          {/* User */}
           {user && (
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

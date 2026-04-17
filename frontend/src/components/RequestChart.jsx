@@ -43,10 +43,13 @@ export default function RequestChart({ timeline, onNavigateToTester }) {
 
   if (!data.length) {
     return (
-      <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full">
-        <h3 className="text-sm font-semibold text-white mb-4">
-          Request Timeline
-        </h3>
+      <div className="glass rounded-2xl border border-white/10 p-5 sm:p-6 shadow-2xl h-full">
+        <div className="flex items-baseline gap-3 mb-4">
+          <h3 className="text-base font-bold text-white tracking-tight">
+            Request Timeline
+          </h3>
+          <span className="text-xs text-dark-400">Last 30 seconds · updating live</span>
+        </div>
         <div className="h-64 flex flex-col items-center justify-center gap-3">
           <div className="w-16 h-16 rounded-full bg-dark-800/80 flex items-center justify-center mb-2 shadow-inner border border-white/5">
             <span className="text-2xl">📈</span>
@@ -69,11 +72,13 @@ export default function RequestChart({ timeline, onNavigateToTester }) {
   }
 
   return (
-    <div className="glass rounded-3xl border border-white/10 p-5 sm:p-6 shadow-2xl">
-      <h3 className="text-sm font-semibold text-white mb-4">
-        Request Timeline{" "}
-        <span className="text-dark-400 font-normal">(Last 60 min)</span>
-      </h3>
+    <div className="glass rounded-2xl border border-white/10 p-5 sm:p-6 shadow-2xl">
+      <div className="flex items-baseline gap-3 mb-4">
+        <h3 className="text-base font-bold text-white tracking-tight">
+          Request Timeline
+        </h3>
+        <span className="text-xs text-dark-400">Last 30 seconds · updating live</span>
+      </div>
       <ResponsiveContainer width="100%" height={280}>
         <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
           <defs>
