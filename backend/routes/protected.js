@@ -3,22 +3,30 @@ const router = express.Router();
 
 /**
  * Sample protected API routes to demonstrate rate limiting.
- * These routes simulate a real API that would be behind the rate limiter.
+ * These routes simulate a real API behind the rate limiter.
  */
 
 router.get("/data", (req, res) => {
   res.json({
-    message: "Here is your data",
-    timestamp: new Date(),
-    requestId: Math.random().toString(36).slice(2),
+    success: true,
+    data: {
+      message: "Here is your data",
+      timestamp: new Date(),
+      requestId: Math.random().toString(36).slice(2),
+    },
+    error: null,
   });
 });
 
 router.post("/data", (req, res) => {
   res.status(201).json({
-    message: "Data created",
-    data: req.body,
-    timestamp: new Date(),
+    success: true,
+    data: {
+      message: "Data created",
+      body: req.body,
+      timestamp: new Date(),
+    },
+    error: null,
   });
 });
 
@@ -28,7 +36,7 @@ router.get("/users", (req, res) => {
     name: `User ${i + 1}`,
     email: `user${i + 1}@example.com`,
   }));
-  res.json(users);
+  res.json({ success: true, data: users, error: null });
 });
 
 router.get("/products", (req, res) => {
@@ -37,7 +45,7 @@ router.get("/products", (req, res) => {
     name: `Product ${i + 1}`,
     price: (Math.random() * 100).toFixed(2),
   }));
-  res.json(products);
+  res.json({ success: true, data: products, error: null });
 });
 
 module.exports = router;

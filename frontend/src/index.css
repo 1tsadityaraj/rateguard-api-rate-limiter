@@ -1,29 +1,33 @@
 /* ─── Google Fonts ──────────────────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @import "tailwindcss";
 
 /* ─── Custom Theme Variables ────────────────────────────────────────────── */
 @theme {
-  --color-dark-900: #0a0a0f;
-  --color-dark-800: #0f0f17;
+  --color-dark-950: #06060a;
+  --color-dark-900: #0a0b0f;
+  --color-dark-800: #0f1018;
   --color-dark-700: #161622;
   --color-dark-600: #1e1e2e;
   --color-dark-500: #2a2a3d;
   --color-dark-400: #3a3a52;
   --color-dark-300: #52526e;
 
-  --color-accent-cyan: #06d6a0;
-  --color-accent-blue: #4cc9f0;
-  --color-accent-purple: #7b61ff;
-  --color-accent-pink: #f72585;
-  --color-accent-orange: #fb8500;
-  --color-accent-yellow: #ffd60a;
+  --color-accent-indigo: #818cf8;
+  --color-accent-purple: #a78bfa;
+  --color-accent-red: #f87171;
+  --color-accent-green: #34d399;
+  --color-accent-amber: #fbbf24;
+  --color-accent-cyan: #22d3ee;
 
-  --color-success: #06d6a0;
-  --color-warning: #fb8500;
-  --color-danger: #ef4444;
-  --color-info: #4cc9f0;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-info: #60a5fa;
+
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /* ─── Base Styles ───────────────────────────────────────────────────────── */
@@ -39,10 +43,10 @@ html {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background-color: var(--color-dark-900);
-  background-image: 
-    radial-gradient(circle at 15% 50%, rgba(6, 214, 160, 0.05), transparent 40%),
-    radial-gradient(circle at 85% 30%, rgba(123, 97, 255, 0.05), transparent 40%);
+  background-color: var(--color-dark-950);
+  background-image:
+    radial-gradient(circle at 15% 50%, rgba(129, 140, 248, 0.04), transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(167, 139, 250, 0.04), transparent 40%);
   background-attachment: fixed;
   color: #e2e8f0;
   -webkit-font-smoothing: antialiased;
@@ -52,30 +56,29 @@ body {
 
 /* ─── Scrollbar Styling ─────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-dark-800);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-dark-400);
-  border-radius: 3px;
+  background: var(--color-dark-500);
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-dark-300);
+  background: var(--color-dark-400);
 }
 
-/* ─── Premium Glass Morphism Utility ─── */
+/* ─── Glass Morphism ─── */
 .glass {
-  background: rgba(15, 15, 23, 0.65);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(15, 16, 24, 0.6);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
 }
 
 .glass-hover {
@@ -83,42 +86,46 @@ body {
 }
 
 .glass-hover:hover {
-  background: rgba(30, 30, 46, 0.75);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+  background: rgba(30, 30, 46, 0.7);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
   transform: translateY(-2px);
 }
 
-/* ─── Modern Grid Background ─── */
+/* ─── Grid Background ─── */
 .bg-grid {
   background-size: 40px 40px;
-  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
 }
 
-/* ─── Gradient Text ─────────────────────────────────────────────────────── */
+/* ─── Gradient Text ─── */
 .gradient-text {
-  background: linear-gradient(135deg, var(--color-accent-cyan), var(--color-accent-blue), var(--color-accent-purple));
+  background: linear-gradient(135deg, var(--color-accent-indigo), var(--color-accent-purple));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 /* ─── Glow Effects ──────────────────────────────────────────────────────── */
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(6, 214, 160, 0.15), 0 0 60px rgba(6, 214, 160, 0.05);
-}
-
-.glow-blue {
-  box-shadow: 0 0 20px rgba(76, 201, 240, 0.15), 0 0 60px rgba(76, 201, 240, 0.05);
+.glow-indigo {
+  box-shadow: 0 0 15px rgba(129, 140, 248, 0.15), 0 0 45px rgba(129, 140, 248, 0.05);
 }
 
 .glow-purple {
-  box-shadow: 0 0 20px rgba(123, 97, 255, 0.15), 0 0 60px rgba(123, 97, 255, 0.05);
+  box-shadow: 0 0 15px rgba(167, 139, 250, 0.15), 0 0 45px rgba(167, 139, 250, 0.05);
 }
 
-.glow-pink {
-  box-shadow: 0 0 20px rgba(247, 37, 133, 0.15), 0 0 60px rgba(247, 37, 133, 0.05);
+.glow-green {
+  box-shadow: 0 0 15px rgba(52, 211, 153, 0.15), 0 0 45px rgba(52, 211, 153, 0.05);
+}
+
+.glow-red {
+  box-shadow: 0 0 15px rgba(248, 113, 113, 0.15), 0 0 45px rgba(248, 113, 113, 0.05);
+}
+
+.glow-amber {
+  box-shadow: 0 0 15px rgba(251, 191, 36, 0.15), 0 0 45px rgba(251, 191, 36, 0.05);
 }
 
 /* ─── Animations ────────────────────────────────────────────────────────── */
@@ -133,8 +140,13 @@ body {
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes fade-in {
@@ -142,20 +154,66 @@ body {
   to { opacity: 1; }
 }
 
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
 .animate-slide-up {
-  animation: slide-up 0.5s ease-out forwards;
+  animation: slide-up 0.4s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
 }
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out forwards;
 }
 
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.04) 50%,
+    transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
 /* ─── Recharts Overrides ────────────────────────────────────────────────── */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 255, 255, 0.03);
 }
 
 .recharts-tooltip-wrapper {
   outline: none !important;
+}
+
+/* ─── Status Dot Pulse ──────────────────────────────────────────────────── */
+.status-dot-success {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.status-dot-danger {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.6);
+}
+
+.status-dot-warning {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-warning);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
 }

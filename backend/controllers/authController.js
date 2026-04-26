@@ -3,92 +3,93 @@ const { getMongoStatus } = require("../config/db");
 
 /**
  * POST /api/auth/register
- * Register a new admin user.
  */
 async function register(req, res) {
   try {
     const { username, email, password } = req.body;
 
     if (!username || !email || !password) {
-      return res
-        .status(400)
-        .json({ error: "username, email, and password are required" });
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: "username, email, and password are required",
+      });
     }
 
     if (password.length < 6) {
-      return res
-        .status(400)
-        .json({ error: "Password must be at least 6 characters" });
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: "Password must be at least 6 characters",
+      });
     }
 
     let user;
 
     if (getMongoStatus()) {
       const User = require("../models/User");
-
-      // Check if user already exists
-      const existing = await User.findOne({
-        $or: [{ email }, { username }],
-      });
-
+      const existing = await User.findOne({ $or: [{ email }, { username }] });
       if (existing) {
-        return res
-          .status(409)
-          .json({ error: "User with that email or username already exists" });
+        return res.status(409).json({
+          success: false,
+          data: null,
+          error: "User with that email or username already exists",
+        });
       }
-
       user = await User.create({ username, email, password });
     } else {
       const { UserStore } = require("../services/memoryStore");
-
-      // Check if user already exists
       const existing = await UserStore.findOne({
         $or: [{ email }, { username }],
       });
-
       if (existing) {
-        return res
-          .status(409)
-          .json({ error: "User with that email or username already exists" });
+        return res.status(409).json({
+          success: false,
+          data: null,
+          error: "User with that email or username already exists",
+        });
       }
-
       user = await UserStore.create({ username, email, password });
     }
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      { expiresIn: "24h" }
     );
 
     res.status(201).json({
-      message: "User registered successfully",
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        },
       },
+      error: null,
     });
   } catch (err) {
     console.error("Register error:", err);
-    res.status(500).json({ error: "Registration failed" });
+    res.status(500).json({ success: false, data: null, error: "Registration failed" });
   }
 }
 
 /**
  * POST /api/auth/login
- * Authenticate and return JWT.
  */
 async function login(req, res) {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ error: "email and password are required" });
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: "email and password are required",
+      });
     }
 
     let user;
@@ -102,42 +103,49 @@ async function login(req, res) {
     }
 
     if (!user || !(await user.comparePassword(password))) {
-      return res.status(401).json({ error: "Invalid credentials" });
+      return res
+        .status(401)
+        .json({ success: false, data: null, error: "Invalid credentials" });
     }
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      { expiresIn: "24h" }
     );
 
     res.json({
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
+      success: true,
+      data: {
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+        },
       },
+      error: null,
     });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ success: false, data: null, error: "Login failed" });
   }
 }
 
 /**
  * GET /api/auth/me
- * Get current user from token.
  */
 async function getMe(req, res) {
   res.json({
-    user: {
+    success: true,
+    data: {
       id: req.user._id,
       username: req.user.username,
       email: req.user.email,
       role: req.user.role,
     },
+    error: null,
   });
 }
 

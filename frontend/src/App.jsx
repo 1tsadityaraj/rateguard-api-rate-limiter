@@ -1,72 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Toaster } from "react-hot-toast";
-import Layout from "./components/Layout";
+import Sidebar from "./components/Sidebar";
 import Dashboard from "./pages/Dashboard";
-import LoginPage from "./pages/LoginPage";
-import BlockedUsersTable from "./components/BlockedUsersTable";
-import AlertsPanel from "./components/AlertsPanel";
-import ApiKeysPanel from "./components/ApiKeysPanel";
-import SettingsPanel from "./components/SettingsPanel";
-import RateTester from "./components/RateTester";
+import BlockedUsers from "./pages/BlockedUsers";
+import Alerts from "./pages/Alerts";
+import APIKeys from "./pages/APIKeys";
+import RateTester from "./pages/RateTester";
+import Settings from "./pages/Settings";
 import { useDashboardData } from "./hooks/useDashboardData";
-import { getMe, logout } from "./services/api";
 
 function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [user, setUser] = useState(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const { connected, blockedUsers, alerts, health, refresh } = useDashboardData();
+  const { connected } = useDashboardData();
 
-  // Check for existing JWT on mount
-  useEffect(() => {
-    // For development/demo: Bypass login and directly load dashboard
-    setUser({ username: "Admin", email: "admin@rateguard.app", role: "admin" });
-    setAuthChecked(true);
-  }, []);
-
-  const handleAuth = (result) => {
-    setUser(result.user);
-  };
-
-  const handleLogout = () => {
-    // logout();
-    // setUser(null);
-    toast.success("Logout disabled in demo mode.");
-  };
-
-  // Show loading while checking auth
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen bg-dark-900 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-white/10 border-t-accent-cyan rounded-full animate-spin" />
-          <p className="text-xs text-dark-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Render the active tab content
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
         return (
-          <Dashboard 
+          <Dashboard
             onNavigateToTester={() => setActiveTab("tester")}
             onNavigateToBlocked={() => setActiveTab("blocked")}
             onNavigateToKeys={() => setActiveTab("apikeys")}
+            onNavigateToAlerts={() => setActiveTab("alerts")}
           />
         );
       case "blocked":
-        return <BlockedUsersTable blockedUsers={blockedUsers} onRefresh={refresh} />;
+        return <BlockedUsers />;
       case "alerts":
-        return <AlertsPanel alerts={alerts} onRefresh={refresh} />;
+        return <Alerts />;
       case "apikeys":
-        return <ApiKeysPanel />;
+        return <APIKeys />;
       case "tester":
         return <RateTester />;
       case "settings":
-        return <SettingsPanel health={health} onRefresh={refresh} />;
+        return <Settings />;
       default:
         return null;
     }
@@ -78,23 +45,60 @@ function App() {
         position="top-right"
         toastOptions={{
           style: {
-            background: "#1e1e2e",
+            background: "#0f1018",
             color: "#e2e8f0",
             borderRadius: "12px",
-            border: "1px solid rgba(255,255,255,0.1)",
+            border: "1px solid rgba(255,255,255,0.08)",
             fontSize: "13px",
+            backdropFilter: "blur(20px)",
           },
         }}
       />
-      <Layout
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        connected={connected}
-        onLogout={handleLogout}
-        user={user}
-      >
-        <div className="max-w-7xl mx-auto">{renderContent()}</div>
-      </Layout>
+
+      <div className="flex h-screen overflow-hidden bg-dark-950 bg-grid relative">
+        {/* Background ambient glow */}
+        <div className="absolute top-[-15%] left-[-10%] w-[35%] h-[35%] rounded-full bg-accent-indigo/[0.03] blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-15%] right-[-10%] w-[35%] h-[35%] rounded-full bg-accent-purple/[0.03] blur-[100px] pointer-events-none" />
+
+        {/* Sidebar */}
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          connected={connected}
+        />
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top Bar */}
+          <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-3 bg-dark-950/80 backdrop-blur-xl border-b border-white/[0.04]">
+            <div className="lg:hidden w-8" /> {/* Spacer for mobile menu button */}
+            <div className="flex-1" />
+            <div className="flex items-center gap-3">
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.15em] ${
+                  connected
+                    ? "bg-success/5 text-success border border-success/15"
+                    : "bg-danger/5 text-danger border border-danger/15"
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    connected
+                      ? "bg-success animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.6)]"
+                      : "bg-danger"
+                  }`}
+                />
+                {connected ? "Live" : "Offline"}
+              </span>
+            </div>
+          </header>
+
+          {/* Page Content */}
+          <main className="flex-1 overflow-y-auto p-6 lg:p-8 relative z-10">
+            <div className="max-w-7xl mx-auto">{renderContent()}</div>
+          </main>
+        </div>
+      </div>
     </>
   );
 }

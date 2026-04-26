@@ -1,6 +1,6 @@
 const { getMongoStatus } = require("../config/db");
 const { getClient, getConnectionStatus } = require("../services/redisClient");
-const { blockUser } = require("../middleware/rateLimiter");
+const { blockUser, PLANS } = require("../middleware/rateLimiter");
 const { Parser } = require("json2csv");
 
 /**
@@ -25,37 +25,24 @@ async function getStats(req, res) {
     const oneDayAgo = new Date(now - 86_400_000);
     const LogStore = getLogStore();
 
-    // Run aggregations in parallel
     const [
       requestsPerMinute,
       requestsPerHour,
       requestsPerDay,
       blockedToday,
-      activeUsers,
+      activeUserIPs,
       statusBreakdown,
       requestTimeline,
+      avgLatencyResult,
     ] = await Promise.all([
-      // Requests in the last minute
       LogStore.countDocuments({ timestamp: { $gte: oneMinuteAgo } }),
-
-      // Requests in the last hour
       LogStore.countDocuments({ timestamp: { $gte: oneHourAgo } }),
-
-      // Requests in the last 24 hours
       LogStore.countDocuments({ timestamp: { $gte: oneDayAgo } }),
-
-      // Blocked requests today
       LogStore.countDocuments({
         timestamp: { $gte: oneDayAgo },
         blocked: true,
       }),
-
-      // Unique active users/IPs in the last hour
-      LogStore.distinct("ip", {
-        timestamp: { $gte: oneHourAgo },
-      }).then((ips) => ips.length),
-
-      // Status code breakdown (last 24h)
+      LogStore.distinct("ip", { timestamp: { $gte: oneHourAgo } }),
       LogStore.aggregate([
         { $match: { timestamp: { $gte: oneDayAgo } } },
         {
@@ -63,22 +50,11 @@ async function getStats(req, res) {
             _id: {
               $switch: {
                 branches: [
-                  {
-                    case: { $lt: ["$statusCode", 300] },
-                    then: "success",
-                  },
-                  {
-                    case: { $lt: ["$statusCode", 400] },
-                    then: "redirect",
-                  },
-                  {
-                    case: { $eq: ["$statusCode", 429] },
-                    then: "rate_limited",
-                  },
-                  {
-                    case: { $lt: ["$statusCode", 500] },
-                    then: "client_error",
-                  },
+                  { case: { $lt: ["$status", 300] }, then: "success" },
+                  { case: { $lt: ["$status", 400] }, then: "redirect" },
+                  { case: { $eq: ["$status", 429] }, then: "rate_limited" },
+                  { case: { $eq: ["$status", 403] }, then: "forbidden" },
+                  { case: { $lt: ["$status", 500] }, then: "client_error" },
                 ],
                 default: "server_error",
               },
@@ -87,8 +63,6 @@ async function getStats(req, res) {
           },
         },
       ]),
-
-      // Request timeline (last 60 minutes, grouped per minute)
       LogStore.aggregate([
         { $match: { timestamp: { $gte: oneHourAgo } } },
         {
@@ -107,6 +81,10 @@ async function getStats(req, res) {
         },
         { $sort: { _id: 1 } },
       ]),
+      LogStore.aggregate([
+        { $match: { timestamp: { $gte: oneHourAgo } } },
+        { $group: { _id: null, avgLatency: { $avg: "$latency" } } },
+      ]),
     ]);
 
     // Count currently blocked users
@@ -114,40 +92,44 @@ async function getStats(req, res) {
     if (getConnectionStatus()) {
       try {
         const redis = getClient();
-        const keys = await redis.keys("rg:blocked:*");
+        const keys = await redis.keys("ratelimit:blocked:*");
         blockedUsersCount = keys.length;
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     } else {
-      // Use in-memory blocked store
       const { BlockedStore } = require("../services/memoryStore");
       blockedUsersCount = BlockedStore.count();
     }
 
-    // Convert status breakdown to a cleaner format
     const statusMap = {};
     statusBreakdown.forEach((s) => {
       statusMap[s._id] = s.count;
     });
 
+    const avgLatency =
+      avgLatencyResult.length > 0 ? Math.round(avgLatencyResult[0].avgLatency || 0) : 0;
+
     res.json({
-      requestsPerMinute,
-      requestsPerHour,
-      requestsPerDay,
-      blockedRequests: blockedToday,
-      activeUsers,
-      blockedUsersCount,
-      statusBreakdown: statusMap,
-      timeline: requestTimeline.map((t) => ({
-        time: t._id,
-        total: t.total,
-        blocked: t.blocked,
-      })),
+      success: true,
+      data: {
+        rpm: requestsPerMinute,
+        rph: requestsPerHour,
+        blocked: blockedUsersCount,
+        activeUsers: activeUserIPs.length,
+        avgLatency,
+        requestsPerDay,
+        blockedRequests: blockedToday,
+        statusBreakdown: statusMap,
+        timeline: requestTimeline.map((t) => ({
+          time: t._id,
+          total: t.total,
+          blocked: t.blocked,
+        })),
+      },
+      error: null,
     });
   } catch (err) {
     console.error("Stats error:", err);
-    res.status(500).json({ error: "Failed to fetch stats" });
+    res.status(500).json({ success: false, data: null, error: "Failed to fetch stats" });
   }
 }
 
@@ -158,7 +140,7 @@ async function getStats(req, res) {
 async function getTopUsers(req, res) {
   try {
     const oneHourAgo = new Date(Date.now() - 3_600_000);
-    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 100);
     const LogStore = getLogStore();
 
     const topUsers = await LogStore.aggregate([
@@ -171,14 +153,13 @@ async function getTopUsers(req, res) {
             $sum: { $cond: [{ $eq: ["$blocked", true] }, 1, 0] },
           },
           lastRequest: { $max: "$timestamp" },
-          paths: { $addToSet: "$path" },
+          paths: { $addToSet: "$route" },
         },
       },
       { $sort: { requestCount: -1 } },
       { $limit: limit },
     ]);
 
-    // Check block status for each user
     const { BlockedStore } = require("../services/memoryStore");
 
     const enriched = await Promise.all(
@@ -190,16 +171,13 @@ async function getTopUsers(req, res) {
         if (getConnectionStatus()) {
           try {
             const redis = getClient();
-            const ttl = await redis.ttl(`rg:blocked:${identifier}`);
+            const ttl = await redis.ttl(`ratelimit:blocked:${identifier}`);
             if (ttl > 0) {
               isCurrentlyBlocked = true;
               blockTTL = ttl;
             }
-          } catch {
-            /* ignore */
-          }
+          } catch {}
         } else {
-          // Check in-memory blocked store
           const ttl = BlockedStore.getTTL(identifier);
           if (ttl > 0) {
             isCurrentlyBlocked = true;
@@ -213,54 +191,60 @@ async function getTopUsers(req, res) {
           requestCount: user.requestCount,
           blockedCount: user.blockedCount,
           lastRequest: user.lastRequest,
-          topPaths: user.paths.slice(0, 5),
+          topPaths: (user.paths || []).slice(0, 5),
           isBlocked: isCurrentlyBlocked,
           blockTTL,
         };
       })
     );
 
-    res.json(enriched);
+    res.json({ success: true, data: enriched, error: null });
   } catch (err) {
     console.error("Top users error:", err);
-    res.status(500).json({ error: "Failed to fetch top users" });
+    res.status(500).json({ success: false, data: null, error: "Failed to fetch top users" });
   }
 }
 
 /**
  * POST /api/block
  * Manually block a user/IP.
- * Body: { identifier: string, duration?: number (minutes) }
  */
 async function manualBlock(req, res) {
   try {
     const { identifier, duration } = req.body;
 
     if (!identifier) {
-      return res.status(400).json({ error: "identifier is required" });
+      return res
+        .status(400)
+        .json({ success: false, data: null, error: "identifier is required" });
     }
 
     const blockDuration =
-      duration ||
-      parseInt(process.env.BLOCK_DURATION_MINUTES, 10) ||
-      10;
+      duration || parseInt(process.env.BLOCK_DURATION_MINUTES, 10) || 10;
 
     let success;
     if (getConnectionStatus()) {
       success = await blockUser(identifier, blockDuration);
     } else {
-      // Use in-memory blocked store
       const { BlockedStore } = require("../services/memoryStore");
       success = BlockedStore.block(identifier, blockDuration);
     }
 
     if (!success) {
-      return res.status(500).json({ error: "Failed to block user" });
+      return res
+        .status(500)
+        .json({ success: false, data: null, error: "Failed to block user" });
     }
 
-    // Emit block event
-    if (req.app.get("io")) {
-      req.app.get("io").emit("user-blocked", {
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("alert", {
+        type: "block",
+        message: `${identifier} manually blocked for ${blockDuration} minutes`,
+        ip: identifier,
+        timestamp: new Date(),
+      });
+      io.emit("user-blocked", {
         identifier,
         duration: blockDuration,
         timestamp: new Date(),
@@ -268,13 +252,13 @@ async function manualBlock(req, res) {
     }
 
     res.json({
-      message: `User ${identifier} blocked for ${blockDuration} minutes`,
-      identifier,
-      duration: blockDuration,
+      success: true,
+      data: { identifier, duration: blockDuration },
+      error: null,
     });
   } catch (err) {
     console.error("Block error:", err);
-    res.status(500).json({ error: "Failed to block user" });
+    res.status(500).json({ success: false, data: null, error: "Failed to block user" });
   }
 }
 
@@ -287,25 +271,32 @@ async function unblockUser(req, res) {
     const { identifier } = req.body;
 
     if (!identifier) {
-      return res.status(400).json({ error: "identifier is required" });
+      return res
+        .status(400)
+        .json({ success: false, data: null, error: "identifier is required" });
     }
 
     if (getConnectionStatus()) {
       const redis = getClient();
-      await redis.del(`rg:blocked:${identifier}`);
+      await redis.del(`ratelimit:blocked:${identifier}`);
     } else {
       const { BlockedStore } = require("../services/memoryStore");
       BlockedStore.unblock(identifier);
     }
 
-    if (req.app.get("io")) {
-      req.app.get("io").emit("user-unblocked", { identifier });
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("user-unblocked", { identifier });
     }
 
-    res.json({ message: `User ${identifier} unblocked`, identifier });
+    res.json({
+      success: true,
+      data: { identifier },
+      error: null,
+    });
   } catch (err) {
     console.error("Unblock error:", err);
-    res.status(500).json({ error: "Failed to unblock user" });
+    res.status(500).json({ success: false, data: null, error: "Failed to unblock user" });
   }
 }
 
@@ -317,26 +308,29 @@ async function getBlockedUsers(req, res) {
   try {
     if (getConnectionStatus()) {
       const redis = getClient();
-      const keys = await redis.keys("rg:blocked:*");
+      const keys = await redis.keys("ratelimit:blocked:*");
 
       const blockedUsers = await Promise.all(
         keys.map(async (key) => {
-          const identifier = key.replace("rg:blocked:", "");
+          const identifier = key.replace("ratelimit:blocked:", "");
           const ttl = await redis.ttl(key);
-          return { identifier, ttl, expiresAt: new Date(Date.now() + ttl * 1000) };
+          return {
+            identifier,
+            ttl,
+            expiresAt: new Date(Date.now() + ttl * 1000),
+          };
         })
       );
 
       blockedUsers.sort((a, b) => b.ttl - a.ttl);
-      return res.json(blockedUsers);
+      return res.json({ success: true, data: blockedUsers, error: null });
     }
 
-    // Use in-memory blocked store
     const { BlockedStore } = require("../services/memoryStore");
-    res.json(BlockedStore.getAll());
+    res.json({ success: true, data: BlockedStore.getAll(), error: null });
   } catch (err) {
     console.error("Blocked users error:", err);
-    res.status(500).json({ error: "Failed to fetch blocked users" });
+    res.status(500).json({ success: false, data: null, error: "Failed to fetch blocked users" });
   }
 }
 
@@ -345,8 +339,6 @@ async function getBlockedUsers(req, res) {
  * System health check.
  */
 async function healthCheck(req, res) {
-  const mongoose = require("mongoose");
-
   const mongoStatus = getMongoStatus()
     ? "connected"
     : process.env.NO_DB === "true"
@@ -364,22 +356,54 @@ async function healthCheck(req, res) {
     uptime: process.uptime(),
     timestamp: new Date(),
     mode: process.env.NO_DB === "true" ? "memory-only (trial)" : "production",
-    services: {
-      redis: redisStatus,
-      mongodb: mongoStatus,
-    },
+    redis: redisStatus,
+    mongo: mongoStatus,
   };
 
-  // In memory mode, we're always "healthy"
   const httpStatus =
     process.env.NO_DB === "true"
       ? 200
-      : health.services.redis === "connected" &&
-        health.services.mongodb === "connected"
+      : redisStatus === "connected" && mongoStatus === "connected"
       ? 200
       : 503;
 
-  res.status(httpStatus).json(health);
+  res.status(httpStatus).json({ success: true, data: health, error: null });
+}
+
+/**
+ * GET /api/logs
+ * Paginated request logs.
+ */
+async function getLogs(req, res) {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    const LogStore = getLogStore();
+
+    const total = await LogStore.countDocuments({});
+    const logs = await LogStore.find({})
+      .sort({ timestamp: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        logs,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      },
+      error: null,
+    });
+  } catch (err) {
+    console.error("Logs error:", err);
+    res.status(500).json({ success: false, data: null, error: "Failed to fetch logs" });
+  }
 }
 
 /**
@@ -401,11 +425,11 @@ async function exportLogs(req, res) {
       "ip",
       "userId",
       "method",
-      "path",
-      "statusCode",
+      "route",
+      "status",
       "algorithm",
       "blocked",
-      "responseTime",
+      "latency",
       "timestamp",
     ];
 
@@ -420,13 +444,13 @@ async function exportLogs(req, res) {
     res.send(csv);
   } catch (err) {
     console.error("Export error:", err);
-    res.status(500).json({ error: "Failed to export logs" });
+    res.status(500).json({ success: false, data: null, error: "Failed to export logs" });
   }
 }
 
 /**
  * GET /api/alerts
- * Detect abuse spikes: returns identifiers with abnormally high request rates.
+ * Detect abuse spikes.
  */
 async function getAlerts(req, res) {
   try {
@@ -444,24 +468,27 @@ async function getAlerts(req, res) {
           },
         },
       },
-      { $match: { count: { $gte: 50 } } }, // threshold: 50 req/5min
       { $sort: { count: -1 } },
       { $limit: 20 },
     ]);
 
-    const alerts = spikes.map((s) => ({
-      type: s.blockedCount > 0 ? "abuse" : "spike",
-      severity: s.count > 200 ? "critical" : s.count > 100 ? "warning" : "info",
-      ip: s._id,
-      requestCount: s.count,
-      blockedCount: s.blockedCount,
-      message: `${s._id} made ${s.count} requests in the last 5 minutes`,
-    }));
+    const alerts = spikes
+      .filter((s) => s.count >= 10)
+      .map((s) => ({
+        type: s.blockedCount > 0 ? "block" : "spike",
+        severity:
+          s.count > 200 ? "critical" : s.count > 100 ? "warning" : "info",
+        ip: s._id,
+        requestCount: s.count,
+        blockedCount: s.blockedCount,
+        message: `${s._id} made ${s.count} requests in the last 5 minutes`,
+        timestamp: new Date(),
+      }));
 
-    res.json(alerts);
+    res.json({ success: true, data: alerts, error: null });
   } catch (err) {
     console.error("Alerts error:", err);
-    res.status(500).json({ error: "Failed to fetch alerts" });
+    res.status(500).json({ success: false, data: null, error: "Failed to fetch alerts" });
   }
 }
 
@@ -472,6 +499,7 @@ module.exports = {
   unblockUser,
   getBlockedUsers,
   healthCheck,
+  getLogs,
   exportLogs,
   getAlerts,
 };

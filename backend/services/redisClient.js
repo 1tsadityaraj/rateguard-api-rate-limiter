@@ -17,7 +17,6 @@ const createClient = () => {
   // Skip Redis entirely in memory-only mode
   if (process.env.NO_DB === "true") {
     console.log("⚡ Redis skipped (memory-only mode)");
-    // Return a stub so callers don't crash
     client = {
       _stub: true,
       on: () => {},
@@ -37,13 +36,19 @@ const createClient = () => {
     return client;
   }
 
+  const redisUrl = process.env.REDIS_URL;
+
   const options = {
-    host: process.env.REDIS_HOST || "127.0.0.1",
-    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    ...(redisUrl
+      ? {} // ioredis parses the URL automatically
+      : {
+          host: process.env.REDIS_HOST || "127.0.0.1",
+          port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+        }),
     retryStrategy: (times) => {
       if (times > 10) {
         console.error("❌ Redis: max reconnection attempts reached");
-        return null; // stop retrying
+        return null;
       }
       return Math.min(times * 200, 5000);
     },
@@ -56,7 +61,7 @@ const createClient = () => {
     options.password = process.env.REDIS_PASSWORD;
   }
 
-  client = new Redis(options);
+  client = redisUrl ? new Redis(redisUrl, options) : new Redis(options);
 
   client.on("connect", () => {
     isConnected = true;

@@ -10,7 +10,9 @@ async function authenticate(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: "Authentication required" });
+      return res
+        .status(401)
+        .json({ success: false, data: null, error: "Authentication required" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -26,16 +28,23 @@ async function authenticate(req, res, next) {
     }
 
     if (!user) {
-      return res.status(401).json({ error: "User not found" });
+      return res
+        .status(401)
+        .json({ success: false, data: null, error: "User not found" });
     }
 
     req.user = user;
+    req.userId = user._id?.toString?.() || user._id;
     next();
   } catch (err) {
     if (err.name === "TokenExpiredError") {
-      return res.status(401).json({ error: "Token expired" });
+      return res
+        .status(401)
+        .json({ success: false, data: null, error: "Token expired" });
     }
-    return res.status(401).json({ error: "Invalid token" });
+    return res
+      .status(401)
+      .json({ success: false, data: null, error: "Invalid token" });
   }
 }
 
@@ -45,7 +54,9 @@ async function authenticate(req, res, next) {
 function authorize(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: "Insufficient permissions" });
+      return res
+        .status(403)
+        .json({ success: false, data: null, error: "Insufficient permissions" });
     }
     next();
   };

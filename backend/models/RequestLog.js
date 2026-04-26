@@ -8,18 +8,18 @@ const requestLogSchema = new mongoose.Schema(
   {
     ip: { type: String, required: true, index: true },
     userId: { type: String, default: null, index: true },
+    route: { type: String, required: true },
     method: { type: String, required: true },
-    path: { type: String, required: true },
-    statusCode: { type: Number, default: 200 },
+    status: { type: Number, default: 200 },
+    latency: { type: Number, default: 0 },
+    blocked: { type: Boolean, default: false },
     algorithm: {
       type: String,
       enum: ["token-bucket", "sliding-window"],
       default: "sliding-window",
     },
-    blocked: { type: Boolean, default: false },
     apiKey: { type: String, default: null },
     userAgent: { type: String, default: null },
-    responseTime: { type: Number, default: 0 }, // ms
     timestamp: { type: Date, default: Date.now },
   },
   {

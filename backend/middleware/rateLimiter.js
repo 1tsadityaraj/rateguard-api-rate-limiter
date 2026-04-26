@@ -1,13 +1,17 @@
 const { getClient, getConnectionStatus } = require("../services/redisClient");
 const { getMongoStatus } = require("../config/db");
 
+// ─── Plan-based Limits ──────────────────────────────────────────────────────
+const PLANS = {
+  free: { limit: 100, window: 60 },
+  pro: { limit: 1000, window: 60 },
+  enterprise: { limit: Infinity, window: 60 },
+};
+
 // ─── In-memory fallback when Redis is unavailable ───────────────────────────
 const memoryStore = new Map();
 
-/**
- * Clean up stale in-memory entries every 60 seconds
- * to prevent unbounded memory growth.
- */
+// Clean up stale in-memory entries every 60 seconds
 setInterval(() => {
   const now = Date.now();
   for (const [key, data] of memoryStore) {
@@ -19,19 +23,12 @@ setInterval(() => {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Extract the real client IP, respecting common proxy headers.
- */
 function getClientIP(req) {
   const forwarded = req.headers["x-forwarded-for"];
   if (forwarded) return forwarded.split(",")[0].trim();
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
-/**
- * Derive a unique identifier: prefer userId (from JWT / API key),
- * fall back to IP address.
- */
 function getIdentifier(req) {
   return req.userId || getClientIP(req);
 }
@@ -42,15 +39,14 @@ function getIdentifier(req) {
  * Each request consumes one token. When the bucket is empty → 429.
  *
  * Redis keys:
- *   rg:tb:{id}:tokens   – current token count
- *   rg:tb:{id}:last     – timestamp of last refill
+ *   ratelimit:ip:{id}:tokens   – current token count
+ *   ratelimit:ip:{id}:last     – timestamp of last refill
  */
 async function tokenBucket(identifier, maxTokens, refillRate, windowSec) {
   const redis = getClient();
-  const tokensKey = `rg:tb:${identifier}:tokens`;
-  const lastKey = `rg:tb:${identifier}:last`;
+  const tokensKey = `ratelimit:ip:${identifier}:tokens`;
+  const lastKey = `ratelimit:ip:${identifier}:last`;
 
-  // Lua script for atomic token-bucket check + consume
   const luaScript = `
     local tokens_key   = KEYS[1]
     local last_key     = KEYS[2]
@@ -67,7 +63,6 @@ async function tokenBucket(identifier, maxTokens, refillRate, windowSec) {
       last   = now
     end
 
-    -- Refill tokens based on elapsed time
     local elapsed   = math.max(0, now - last)
     local new_tokens = math.min(max_tokens, tokens + (elapsed * refill_rate))
 
@@ -106,10 +101,13 @@ async function tokenBucket(identifier, maxTokens, refillRate, windowSec) {
  * Sliding window log using a Redis sorted set.
  * Each request is scored by its timestamp. We count entries
  * within the current window; if count ≥ limit → 429.
+ *
+ * Redis keys:
+ *   ratelimit:user:{id}
  */
 async function slidingWindow(identifier, limit, windowSec) {
   const redis = getClient();
-  const key = `rg:sw:${identifier}`;
+  const key = `ratelimit:user:${identifier}`;
 
   const luaScript = `
     local key       = KEYS[1]
@@ -120,10 +118,8 @@ async function slidingWindow(identifier, limit, windowSec) {
 
     local window_start = now - window
 
-    -- Remove expired entries
     redis.call('ZREMRANGEBYSCORE', key, '-inf', window_start)
 
-    -- Count current entries
     local count = redis.call('ZCARD', key)
 
     if count < limit then
@@ -131,7 +127,6 @@ async function slidingWindow(identifier, limit, windowSec) {
       redis.call('EXPIRE', key, window + 1)
       return {1, limit - count - 1, 0}
     else
-      -- Calculate when the oldest entry will expire
       local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
       local retry_after = 0
       if #oldest > 0 then
@@ -172,7 +167,6 @@ function slidingWindowMemory(identifier, limit, windowSec) {
   }
 
   const entry = memoryStore.get(key);
-  // Prune expired timestamps
   entry.timestamps = entry.timestamps.filter((t) => t > now - windowMs);
   entry.expiresAt = now + windowMs * 2;
 
@@ -195,15 +189,14 @@ async function isBlocked(identifier) {
   try {
     if (getConnectionStatus()) {
       const redis = getClient();
-      const ttl = await redis.ttl(`rg:blocked:${identifier}`);
+      const ttl = await redis.ttl(`ratelimit:blocked:${identifier}`);
       return ttl > 0 ? ttl : false;
     }
-    // In-memory fallback
     const { BlockedStore } = require("../services/memoryStore");
     const ttl = BlockedStore.getTTL(identifier);
     return ttl > 0 ? ttl : false;
   } catch {
-    return false;
+    return false; // Redis failure never crashes the server
   }
 }
 
@@ -212,10 +205,9 @@ async function blockUser(identifier, durationMin) {
     if (getConnectionStatus()) {
       const redis = getClient();
       const durationSec = durationMin * 60;
-      await redis.set(`rg:blocked:${identifier}`, "1", "EX", durationSec);
+      await redis.set(`ratelimit:blocked:${identifier}`, "1", "EX", durationSec);
       return true;
     }
-    // In-memory fallback
     const { BlockedStore } = require("../services/memoryStore");
     return BlockedStore.block(identifier, durationMin);
   } catch {
@@ -228,20 +220,19 @@ async function trackViolation(identifier, blockDurationMin) {
   try {
     if (getConnectionStatus()) {
       const redis = getClient();
-      const violationKey = `rg:violations:${identifier}`;
+      const violationKey = `ratelimit:violations:${identifier}`;
       const count = await redis.incr(violationKey);
-      await redis.expire(violationKey, 300); // 5-minute rolling window
+      await redis.expire(violationKey, 300);
 
       // Auto-block after 5 violations in 5 minutes
       if (count >= 5) {
         await blockUser(identifier, blockDurationMin);
         await redis.del(violationKey);
-        return true; // user was auto-blocked
+        return true;
       }
       return false;
     }
 
-    // In-memory fallback
     const { ViolationStore } = require("../services/memoryStore");
     const count = ViolationStore.increment(identifier);
     if (count >= 5) {
@@ -265,30 +256,29 @@ function logRequest(req, statusCode, blocked, algorithm) {
     ip: getClientIP(req),
     userId: req.userId || null,
     method: req.method,
-    path: req.originalUrl,
-    statusCode,
+    route: req.originalUrl,
+    status: statusCode,
+    latency: Date.now() - (req._startTime || Date.now()),
     algorithm,
     blocked,
     apiKey: req.apiKey || null,
     userAgent: req.headers["user-agent"] || null,
-    responseTime: Date.now() - (req._startTime || Date.now()),
     timestamp: new Date(),
   };
 
   // Persist to the appropriate store (non-blocking)
   if (getMongoStatus()) {
     const RequestLog = require("../models/RequestLog");
-    RequestLog.create(logEntry).catch(() => {
-      /* swallow — we don't crash for logging failures */
-    });
+    RequestLog.create(logEntry).catch(() => {});
   } else {
     const { RequestLogStore } = require("../services/memoryStore");
     RequestLogStore.create(logEntry).catch(() => {});
   }
 
   // Emit to Socket.io if available
-  if (req.app.get("io")) {
-    req.app.get("io").emit("request-log", logEntry);
+  const io = req.app.get("io");
+  if (io) {
+    io.emit("new-request", logEntry);
   }
 }
 
@@ -304,13 +294,12 @@ function logRequest(req, statusCode, blocked, algorithm) {
  */
 function createRateLimiter(options = {}) {
   const {
-    algorithm = "sliding-window",
+    algorithm = process.env.ALGORITHM || "sliding-window",
     limit = parseInt(process.env.DEFAULT_RATE_LIMIT, 10) || 100,
     windowSec = parseInt(process.env.DEFAULT_WINDOW_SECONDS, 10) || 60,
     blockDuration = parseInt(process.env.BLOCK_DURATION_MINUTES, 10) || 10,
   } = options;
 
-  // Token bucket refill rate: refill to full capacity over one window
   const refillRate = limit / windowSec;
 
   return async (req, res, next) => {
@@ -318,31 +307,44 @@ function createRateLimiter(options = {}) {
 
     const identifier = getIdentifier(req);
 
-    // ── 1. Check if user is blocked ──
+    // 1. Check if user is blocked
     const blockedTTL = await isBlocked(identifier);
     if (blockedTTL) {
+      res.set({
+        "X-RateLimit-Limit": 0,
+        "X-RateLimit-Remaining": 0,
+        "X-RateLimit-Reset": Math.ceil(Date.now() / 1000) + blockedTTL,
+        "Retry-After": blockedTTL,
+      });
+
       logRequest(req, 429, true, algorithm);
       return res.status(429).json({
+        success: false,
         error: "Too Many Requests",
+        data: null,
         message: `You are temporarily blocked. Try again in ${blockedTTL} seconds.`,
         retryAfter: blockedTTL,
         blocked: true,
       });
     }
 
-    // ── 2. Determine rate limit (tier-aware) ──
-    let effectiveLimit = limit;
-    if (req.apiKeyTier === "pro") {
-      effectiveLimit = parseInt(process.env.PRO_TIER_LIMIT, 10) || 200;
-    } else if (req.apiKeyTier === "free") {
-      effectiveLimit = parseInt(process.env.FREE_TIER_LIMIT, 10) || 30;
+    // 2. Determine plan-based rate limit
+    const tier = req.apiKeyTier || "free";
+    const plan = PLANS[tier] || PLANS.free;
+    const effectiveLimit = plan.limit === Infinity ? Infinity : (plan.limit || limit);
+
+    // Enterprise gets unlimited
+    if (effectiveLimit === Infinity) {
+      res.on("finish", () => {
+        logRequest(req, res.statusCode, false, algorithm);
+      });
+      return next();
     }
 
-    // ── 3. Apply rate-limit algorithm ──
+    // 3. Apply rate-limit algorithm
     let result;
     try {
       if (!getConnectionStatus()) {
-        // Redis is down — use in-memory fallback
         result = slidingWindowMemory(identifier, effectiveLimit, windowSec);
       } else if (algorithm === "token-bucket") {
         result = await tokenBucket(
@@ -355,12 +357,12 @@ function createRateLimiter(options = {}) {
         result = await slidingWindow(identifier, effectiveLimit, windowSec);
       }
     } catch (err) {
-      // Redis command failed — fall back to memory
+      // Redis command failed — fail open with warning log
       console.error("Rate limiter Redis error, using fallback:", err.message);
       result = slidingWindowMemory(identifier, effectiveLimit, windowSec);
     }
 
-    // ── 4. Set standard rate-limit headers ──
+    // 4. Set standard rate-limit headers
     res.set({
       "X-RateLimit-Limit": effectiveLimit,
       "X-RateLimit-Remaining": result.remaining,
@@ -368,15 +370,30 @@ function createRateLimiter(options = {}) {
       "X-RateLimit-Reset": Math.ceil(Date.now() / 1000) + windowSec,
     });
 
-    // ── 5. If not allowed → track violation, maybe block ──
+    // 5. If not allowed → track violation, maybe block
     if (!result.allowed) {
       res.set("Retry-After", result.retryAfter);
 
       const wasBlocked = await trackViolation(identifier, blockDuration);
       logRequest(req, 429, wasBlocked, algorithm);
 
+      // Emit alert via Socket.io
+      const io = req.app.get("io");
+      if (io) {
+        io.emit("alert", {
+          type: wasBlocked ? "block" : "spike",
+          message: wasBlocked
+            ? `${identifier} has been blocked for ${blockDuration} minutes`
+            : `${identifier} exceeded rate limit`,
+          ip: identifier,
+          timestamp: new Date(),
+        });
+      }
+
       return res.status(429).json({
+        success: false,
         error: "Too Many Requests",
+        data: null,
         message: wasBlocked
           ? `You have been blocked for ${blockDuration} minutes due to repeated violations.`
           : `Rate limit exceeded. Try again in ${result.retryAfter} seconds.`,
@@ -385,7 +402,7 @@ function createRateLimiter(options = {}) {
       });
     }
 
-    // ── 6. Allowed — log and continue ──
+    // 6. Allowed — log and continue
     res.on("finish", () => {
       logRequest(req, res.statusCode, false, algorithm);
     });
@@ -400,4 +417,5 @@ module.exports = {
   isBlocked,
   getClientIP,
   getIdentifier,
+  PLANS,
 };

@@ -3,10 +3,9 @@ const router = express.Router();
 const {
   getStats,
   getTopUsers,
-  manualBlock,
-  unblockUser,
   getBlockedUsers,
   healthCheck,
+  getLogs,
   exportLogs,
   getAlerts,
 } = require("../controllers/statsController");
@@ -19,10 +18,7 @@ router.get("/stats", getStats);
 router.get("/top-users", getTopUsers);
 router.get("/blocked-users", getBlockedUsers);
 router.get("/alerts", getAlerts);
-
-// Actions
-router.post("/block", manualBlock);
-router.post("/unblock", unblockUser);
+router.get("/logs", getLogs);
 
 // Export
 router.get("/logs/export", exportLogs);

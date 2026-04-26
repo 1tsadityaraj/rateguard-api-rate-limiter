@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 /**
- * API Key model — supports tiered rate limiting (Free / Pro).
+ * API Key model — supports tiered rate limiting (Free / Pro / Enterprise).
  * Each key maps to a userId and a tier that determines its rate limit.
  */
 const apiKeySchema = new mongoose.Schema(
@@ -24,7 +24,7 @@ const apiKeySchema = new mongoose.Schema(
     },
     tier: {
       type: String,
-      enum: ["free", "pro"],
+      enum: ["free", "pro", "enterprise"],
       default: "free",
     },
     active: {

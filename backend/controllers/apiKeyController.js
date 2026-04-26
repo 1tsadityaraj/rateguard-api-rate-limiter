@@ -1,53 +1,61 @@
 const { v4: uuidv4 } = require("uuid");
+const bcrypt = require("bcryptjs");
 const { getMongoStatus } = require("../config/db");
 
 /**
- * POST /api/keys
+ * POST /api/keys/generate
  * Generate a new API key.
  */
-async function createKey(req, res) {
+async function generateKey(req, res) {
   try {
     const { name, userId, tier } = req.body;
 
     if (!name || !userId) {
-      return res.status(400).json({ error: "name and userId are required" });
+      return res
+        .status(400)
+        .json({ success: false, data: null, error: "name and userId are required" });
     }
 
-    const key = `rg_${tier === "pro" ? "pro" : "free"}_${uuidv4().replace(/-/g, "")}`;
+    const validTiers = ["free", "pro", "enterprise"];
+    const keyTier = validTiers.includes(tier) ? tier : "free";
+
+    // Generate key with tier prefix
+    const rawKey = `rg_${keyTier}_${uuidv4().replace(/-/g, "")}`;
 
     let apiKey;
 
     if (getMongoStatus()) {
       const ApiKey = require("../models/ApiKey");
       apiKey = await ApiKey.create({
-        key,
+        key: rawKey,
         name,
         userId,
-        tier: tier || "free",
+        tier: keyTier,
       });
     } else {
       const { ApiKeyStore } = require("../services/memoryStore");
       apiKey = await ApiKeyStore.create({
-        key,
+        key: rawKey,
         name,
         userId,
-        tier: tier || "free",
+        tier: keyTier,
       });
     }
 
     res.status(201).json({
-      message: "API key created",
-      apiKey: {
+      success: true,
+      data: {
         id: apiKey._id,
         key: apiKey.key,
         name: apiKey.name,
         tier: apiKey.tier,
         userId: apiKey.userId,
       },
+      error: null,
     });
   } catch (err) {
     console.error("Create key error:", err);
-    res.status(500).json({ error: "Failed to create API key" });
+    res.status(500).json({ success: false, data: null, error: "Failed to create API key" });
   }
 }
 
@@ -61,24 +69,22 @@ async function listKeys(req, res) {
 
     if (getMongoStatus()) {
       const ApiKey = require("../models/ApiKey");
-      keys = await ApiKey.find()
-        .select("-__v")
-        .sort({ createdAt: -1 });
+      keys = await ApiKey.find().select("-__v").sort({ createdAt: -1 });
     } else {
       const { ApiKeyStore } = require("../services/memoryStore");
       keys = await ApiKeyStore.findSorted();
     }
 
-    res.json(keys);
+    res.json({ success: true, data: keys, error: null });
   } catch (err) {
     console.error("List keys error:", err);
-    res.status(500).json({ error: "Failed to list API keys" });
+    res.status(500).json({ success: false, data: null, error: "Failed to list API keys" });
   }
 }
 
 /**
  * DELETE /api/keys/:id
- * Deactivate an API key.
+ * Revoke (deactivate) an API key.
  */
 async function revokeKey(req, res) {
   try {
@@ -93,18 +99,22 @@ async function revokeKey(req, res) {
       );
     } else {
       const { ApiKeyStore } = require("../services/memoryStore");
-      key = await ApiKeyStore.findByIdAndUpdate(req.params.id, { active: false });
+      key = await ApiKeyStore.findByIdAndUpdate(req.params.id, {
+        active: false,
+      });
     }
 
     if (!key) {
-      return res.status(404).json({ error: "API key not found" });
+      return res
+        .status(404)
+        .json({ success: false, data: null, error: "API key not found" });
     }
 
-    res.json({ message: "API key revoked", key });
+    res.json({ success: true, data: key, error: null });
   } catch (err) {
     console.error("Revoke key error:", err);
-    res.status(500).json({ error: "Failed to revoke API key" });
+    res.status(500).json({ success: false, data: null, error: "Failed to revoke API key" });
   }
 }
 
-module.exports = { createKey, listKeys, revokeKey };
+module.exports = { generateKey, listKeys, revokeKey };

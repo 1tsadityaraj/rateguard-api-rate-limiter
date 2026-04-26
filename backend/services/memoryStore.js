@@ -7,9 +7,9 @@ const { v4: uuidv4 } = require("uuid");
  */
 
 // ─── Storage Maps ───────────────────────────────────────────────────────────
-const users = new Map();       // id -> user doc
-const apiKeys = new Map();     // id -> apiKey doc
-const requestLogs = [];        // array of log entries (capped at 10,000)
+const users = new Map(); // id -> user doc
+const apiKeys = new Map(); // id -> apiKey doc
+const requestLogs = []; // array of log entries (capped at 10,000)
 const blockedUsers = new Map(); // identifier -> { expiresAt }
 
 const MAX_LOGS = 10_000;
@@ -22,7 +22,6 @@ function genId() {
 // ─── User Store ─────────────────────────────────────────────────────────────
 const UserStore = {
   async create({ username, email, password, role = "admin" }) {
-    // Check uniqueness
     for (const u of users.values()) {
       if (u.email === email || u.username === username) {
         const err = new Error("User with that email or username already exists");
@@ -42,7 +41,6 @@ const UserStore = {
       updatedAt: new Date(),
     };
     users.set(id, user);
-    // Return a copy without password
     const { password: _, ...safe } = user;
     safe.comparePassword = async (candidate) =>
       bcrypt.compare(candidate, hashedPassword);
@@ -83,7 +81,6 @@ const UserStore = {
     return copy;
   },
 
-  // Chainable select mock
   findOneChain(query) {
     return {
       select: () => UserStore.findOne(query),
@@ -112,7 +109,9 @@ const ApiKeyStore = {
 
   async findOne(query) {
     for (const k of apiKeys.values()) {
-      const match = Object.entries(query).every(([field, val]) => k[field] === val);
+      const match = Object.entries(query).every(
+        ([field, val]) => k[field] === val
+      );
       if (match) return { ...k };
     }
     return null;
@@ -173,7 +172,6 @@ const RequestLogStore = {
       timestamp: entry.timestamp || new Date(),
     };
     requestLogs.push(doc);
-    // Cap at MAX_LOGS
     if (requestLogs.length > MAX_LOGS) {
       requestLogs.splice(0, requestLogs.length - MAX_LOGS);
     }
@@ -209,6 +207,12 @@ const RequestLogStore = {
           limit: (n) => ({
             lean: () => Promise.resolve(filtered.slice(0, n)),
           }),
+          skip: (s) => ({
+            limit: (n) => ({
+              lean: () => Promise.resolve(filtered.slice(s, s + n)),
+            }),
+          }),
+          lean: () => Promise.resolve(filtered),
         };
       },
     };
@@ -219,7 +223,11 @@ const RequestLogStore = {
 function filterLogs(query) {
   return requestLogs.filter((log) => {
     for (const [key, cond] of Object.entries(query)) {
-      if (typeof cond === "object" && cond !== null && !(cond instanceof Date)) {
+      if (
+        typeof cond === "object" &&
+        cond !== null &&
+        !(cond instanceof Date)
+      ) {
         if (cond.$gte && new Date(log[key]) < new Date(cond.$gte)) return false;
         if (cond.$lte && new Date(log[key]) > new Date(cond.$lte)) return false;
         if (cond.$eq && log[key] !== cond.$eq) return false;
@@ -238,9 +246,15 @@ function runAggregate(pipeline) {
     if (stage.$match) {
       docs = docs.filter((doc) => {
         for (const [key, cond] of Object.entries(stage.$match)) {
-          if (typeof cond === "object" && cond !== null && !(cond instanceof Date)) {
-            if (cond.$gte && new Date(doc[key]) < new Date(cond.$gte)) return false;
-            if (cond.$lte && new Date(doc[key]) > new Date(cond.$lte)) return false;
+          if (
+            typeof cond === "object" &&
+            cond !== null &&
+            !(cond instanceof Date)
+          ) {
+            if (cond.$gte && new Date(doc[key]) < new Date(cond.$gte))
+              return false;
+            if (cond.$lte && new Date(doc[key]) > new Date(cond.$lte))
+              return false;
             if (cond.$eq && doc[key] !== cond.$eq) return false;
           } else {
             if (doc[key] !== cond) return false;
@@ -257,40 +271,21 @@ function runAggregate(pipeline) {
       for (const doc of docs) {
         let groupKey;
 
-        // Resolve _id
         if (typeof groupDef._id === "string" && groupDef._id.startsWith("$")) {
           groupKey = doc[groupDef._id.slice(1)];
-        } else if (typeof groupDef._id === "object" && groupDef._id !== null) {
+        } else if (
+          typeof groupDef._id === "object" &&
+          groupDef._id !== null
+        ) {
           if (groupDef._id.$switch) {
-            // Status code switch
-            groupKey = "server_error";
-            for (const branch of groupDef._id.$switch.branches) {
-              if (branch.case.$lt) {
-                const [field, val] = Object.entries(branch.case.$lt)[0] || [];
-                const f = typeof branch.case.$lt === "object" ? Object.values(branch.case.$lt) : [];
-                const fieldName = branch.case.$lt[0]?.replace?.("$", "") || "statusCode";
-                const threshold = branch.case.$lt[1] || (Array.isArray(f) ? f[1] : val);
-                if (doc.statusCode < threshold) {
-                  groupKey = branch.then;
-                  break;
-                }
-              }
-              if (branch.case.$eq) {
-                const threshold = Array.isArray(branch.case.$eq) ? branch.case.$eq[1] : branch.case.$eq;
-                if (doc.statusCode === threshold) {
-                  groupKey = branch.then;
-                  break;
-                }
-              }
-            }
-            // Simpler: just categorize by status code directly
-            if (doc.statusCode < 300) groupKey = "success";
-            else if (doc.statusCode < 400) groupKey = "redirect";
-            else if (doc.statusCode === 429) groupKey = "rate_limited";
-            else if (doc.statusCode < 500) groupKey = "client_error";
+            // Categorize by status code
+            if (doc.status < 300) groupKey = "success";
+            else if (doc.status < 400) groupKey = "redirect";
+            else if (doc.status === 429) groupKey = "rate_limited";
+            else if (doc.status === 403) groupKey = "forbidden";
+            else if (doc.status < 500) groupKey = "client_error";
             else groupKey = "server_error";
           } else if (groupDef._id.$dateToString) {
-            // Date formatting
             const ts = new Date(doc.timestamp);
             const y = ts.getFullYear();
             const m = String(ts.getMonth() + 1).padStart(2, "0");
@@ -299,12 +294,13 @@ function runAggregate(pipeline) {
             const min = String(ts.getMinutes()).padStart(2, "0");
             groupKey = `${y}-${m}-${d}T${h}:${min}`;
           } else {
-            // Object key like { ip: "$ip", userId: "$userId" }
             groupKey = JSON.stringify(
               Object.fromEntries(
                 Object.entries(groupDef._id).map(([k, v]) => [
                   k,
-                  typeof v === "string" && v.startsWith("$") ? doc[v.slice(1)] : v,
+                  typeof v === "string" && v.startsWith("$")
+                    ? doc[v.slice(1)]
+                    : v,
                 ])
               )
             );
@@ -319,7 +315,6 @@ function runAggregate(pipeline) {
         groups.get(groupKey)._docs.push(doc);
       }
 
-      // Apply accumulators
       docs = Array.from(groups.values()).map((g) => {
         const result = { _id: g._id };
         for (const [field, acc] of Object.entries(groupDef)) {
@@ -328,11 +323,10 @@ function runAggregate(pipeline) {
             if (acc.$sum === 1) {
               result[field] = g._docs.length;
             } else if (typeof acc.$sum === "object" && acc.$sum.$cond) {
-              // Conditional sum
               result[field] = g._docs.filter((d) => {
                 const cond = acc.$sum.$cond;
                 if (Array.isArray(cond)) {
-                  const [test, trueVal] = cond;
+                  const [test] = cond;
                   if (test.$eq) {
                     const fld = test.$eq[0].replace("$", "");
                     return d[fld] === test.$eq[1];
@@ -342,10 +336,16 @@ function runAggregate(pipeline) {
               }).length;
             }
           }
+          if (acc.$avg) {
+            const fld = acc.$avg.replace("$", "");
+            const sum = g._docs.reduce((s, d) => s + (d[fld] || 0), 0);
+            result[field] = g._docs.length > 0 ? Math.round(sum / g._docs.length) : 0;
+          }
           if (acc.$max) {
             const fld = acc.$max.replace("$", "");
             result[field] = g._docs.reduce(
-              (max, d) => (new Date(d[fld]) > new Date(max) ? d[fld] : max),
+              (max, d) =>
+                new Date(d[fld]) > new Date(max) ? d[fld] : max,
               g._docs[0]?.[fld]
             );
           }
@@ -355,7 +355,6 @@ function runAggregate(pipeline) {
           }
         }
 
-        // Parse complex _id back
         if (typeof g._id === "string" && g._id.startsWith("{")) {
           try {
             result._id = JSON.parse(g._id);
@@ -373,10 +372,6 @@ function runAggregate(pipeline) {
 
     if (stage.$limit) {
       docs = docs.slice(0, stage.$limit);
-    }
-
-    if (stage.$match && docs.length === 0) {
-      // Already filtered above
     }
   }
 
@@ -427,7 +422,6 @@ const BlockedStore = {
   },
 
   count() {
-    // Clean expired first
     const now = Date.now();
     for (const [id, entry] of blockedUsers) {
       if (entry.expiresAt <= now) blockedUsers.delete(id);
@@ -437,14 +431,14 @@ const BlockedStore = {
 };
 
 // ─── Violations tracking (in-memory, replaces Redis) ────────────────────────
-const violations = new Map(); // identifier -> { count, expiresAt }
+const violations = new Map();
 
 const ViolationStore = {
   increment(identifier) {
     const now = Date.now();
     let entry = violations.get(identifier);
     if (!entry || entry.expiresAt < now) {
-      entry = { count: 0, expiresAt: now + 300_000 }; // 5-minute window
+      entry = { count: 0, expiresAt: now + 300_000 };
     }
     entry.count++;
     violations.set(identifier, entry);
@@ -456,7 +450,7 @@ const ViolationStore = {
   },
 };
 
-// Clean up expired violations every 60s
+// Clean up expired entries every 60s
 setInterval(() => {
   const now = Date.now();
   for (const [id, entry] of violations) {

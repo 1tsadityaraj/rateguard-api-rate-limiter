@@ -19,17 +19,20 @@ api.interceptors.request.use((config) => {
 
 // ─── Stats / Dashboard ─────────────────────────────────────────────────────
 
-export const fetchStats = () => api.get("/stats").then((r) => r.data);
+export const fetchStats = () => api.get("/stats").then((r) => r.data?.data || r.data);
 
-export const fetchTopUsers = (limit = 20) =>
-  api.get(`/top-users?limit=${limit}`).then((r) => r.data);
+export const fetchTopUsers = (limit = 10) =>
+  api.get(`/top-users?limit=${limit}`).then((r) => r.data?.data || r.data);
 
 export const fetchBlockedUsers = () =>
-  api.get("/blocked-users").then((r) => r.data);
+  api.get("/blocked-users").then((r) => r.data?.data || r.data);
 
-export const fetchAlerts = () => api.get("/alerts").then((r) => r.data);
+export const fetchAlerts = () => api.get("/alerts").then((r) => r.data?.data || r.data);
 
-export const fetchHealth = () => api.get("/health").then((r) => r.data);
+export const fetchHealth = () => api.get("/health").then((r) => r.data?.data || r.data);
+
+export const fetchLogs = (page = 1, limit = 50) =>
+  api.get(`/logs?page=${page}&limit=${limit}`).then((r) => r.data?.data || r.data);
 
 // ─── Actions ────────────────────────────────────────────────────────────────
 
@@ -59,17 +62,19 @@ export const exportLogs = (hours = 24) =>
 
 export const login = (email, password) =>
   api.post("/auth/login", { email, password }).then((r) => {
-    localStorage.setItem("rateguard_token", r.data.token);
-    return r.data;
+    const data = r.data?.data || r.data;
+    if (data.token) localStorage.setItem("rateguard_token", data.token);
+    return data;
   });
 
 export const register = (username, email, password) =>
   api.post("/auth/register", { username, email, password }).then((r) => {
-    localStorage.setItem("rateguard_token", r.data.token);
-    return r.data;
+    const data = r.data?.data || r.data;
+    if (data.token) localStorage.setItem("rateguard_token", data.token);
+    return data;
   });
 
-export const getMe = () => api.get("/auth/me").then((r) => r.data);
+export const getMe = () => api.get("/auth/me").then((r) => r.data?.data || r.data);
 
 export const logout = () => {
   localStorage.removeItem("rateguard_token");
@@ -77,13 +82,13 @@ export const logout = () => {
 
 // ─── API Keys ───────────────────────────────────────────────────────────────
 
-export const createApiKey = (name, userId, tier = "free") =>
-  api.post("/keys", { name, userId, tier }).then((r) => r.data);
+export const generateApiKey = (name, userId, tier = "free") =>
+  api.post("/keys/generate", { name, userId, tier }).then((r) => r.data?.data || r.data);
 
-export const listApiKeys = () => api.get("/keys").then((r) => r.data);
+export const listApiKeys = () => api.get("/keys").then((r) => r.data?.data || r.data);
 
 export const revokeApiKey = (id) =>
-  api.delete(`/keys/${id}`).then((r) => r.data);
+  api.delete(`/keys/${id}`).then((r) => r.data?.data || r.data);
 
 // ─── Test endpoints (rate-limited) ──────────────────────────────────────────
 

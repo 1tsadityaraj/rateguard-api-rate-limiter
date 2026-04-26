@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { fetchStats, fetchTopUsers, fetchBlockedUsers, fetchAlerts, fetchHealth } from "../services/api";
+import {
+  fetchStats,
+  fetchTopUsers,
+  fetchBlockedUsers,
+  fetchAlerts,
+  fetchHealth,
+} from "../services/api";
 import { getSocket } from "../services/socket";
 
 /**
@@ -19,10 +25,9 @@ export function useDashboardData() {
   const [connected, setConnected] = useState(false);
 
   const maxRecentLogs = 50;
-  const pollInterval = 10_000; // 10 seconds
+  const pollInterval = 10_000;
   const intervalRef = useRef(null);
 
-  // Fetch all dashboard data
   const refresh = useCallback(async () => {
     try {
       const [statsData, topData, blockedData, alertsData, healthData] =
@@ -36,7 +41,8 @@ export function useDashboardData() {
 
       if (statsData.status === "fulfilled") setStats(statsData.value);
       if (topData.status === "fulfilled") setTopUsers(topData.value);
-      if (blockedData.status === "fulfilled") setBlockedUsers(blockedData.value);
+      if (blockedData.status === "fulfilled")
+        setBlockedUsers(blockedData.value);
       if (alertsData.status === "fulfilled") setAlerts(alertsData.value);
       if (healthData.status === "fulfilled") setHealth(healthData.value);
 
@@ -55,7 +61,7 @@ export function useDashboardData() {
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);
 
-    const handleRequestLog = (log) => {
+    const handleNewRequest = (log) => {
       setRecentLogs((prev) => [log, ...prev].slice(0, maxRecentLogs));
 
       // Update stats counters in real-time
@@ -63,17 +69,25 @@ export function useDashboardData() {
         if (!prev) return prev;
         return {
           ...prev,
-          requestsPerMinute: prev.requestsPerMinute + 1,
-          requestsPerDay: prev.requestsPerDay + 1,
-          blockedRequests: log.blocked
-            ? prev.blockedRequests + 1
-            : prev.blockedRequests,
+          rpm: (prev.rpm || 0) + 1,
+          rph: (prev.rph || 0) + 1,
+          blocked: log.blocked ? (prev.blocked || 0) + 1 : prev.blocked,
         };
       });
     };
 
+    const handleStatsUpdate = (data) => {
+      setStats((prev) => ({
+        ...prev,
+        ...data,
+      }));
+    };
+
+    const handleAlert = (alert) => {
+      setAlerts((prev) => [alert, ...prev].slice(0, 50));
+    };
+
     const handleUserBlocked = () => {
-      // Re-fetch blocked users when someone gets blocked
       fetchBlockedUsers().then(setBlockedUsers).catch(() => {});
     };
 
@@ -83,7 +97,9 @@ export function useDashboardData() {
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", handleDisconnect);
-    socket.on("request-log", handleRequestLog);
+    socket.on("new-request", handleNewRequest);
+    socket.on("stats-update", handleStatsUpdate);
+    socket.on("alert", handleAlert);
     socket.on("user-blocked", handleUserBlocked);
     socket.on("user-unblocked", handleUserUnblocked);
 
@@ -92,7 +108,9 @@ export function useDashboardData() {
     return () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
-      socket.off("request-log", handleRequestLog);
+      socket.off("new-request", handleNewRequest);
+      socket.off("stats-update", handleStatsUpdate);
+      socket.off("alert", handleAlert);
       socket.off("user-blocked", handleUserBlocked);
       socket.off("user-unblocked", handleUserUnblocked);
     };
